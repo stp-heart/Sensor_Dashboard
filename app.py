@@ -1,5 +1,124 @@
 import streamlit as st
 import pandas as pd
+import time
+
+# --- 1. ฟังก์ชันจำลองการดึง/บันทึก User (เดี๋ยวเราจะเปลี่ยนเป็น Google Sheets ใน Step 2) ---
+def load_users():
+    # ในความเป็นจริง เราจะดึงจาก Google Sheet
+    # โครงสร้างข้อมูล: Username, Password, Name, Role
+    # สมมติข้อมูลเริ่มต้น (Hardcode ไว้ก่อนเพื่อทดสอบ)
+    default_users = pd.DataFrame([
+        {"username": "admin", "password": "123", "name": "Heart (Admin)", "role": "Admin"},
+        {"username": "film", "password": "123", "name": "Film (User)", "role": "User"},
+    ])
+    return default_users
+
+def check_login(username, password):
+    users = load_users()
+    user = users[(users['username'] == username) & (users['password'] == password)]
+    if not user.empty:
+        return user.iloc[0] # คืนค่าข้อมูล User คนนั้น
+    return None
+
+# --- 2. หน้า Login & Register ---
+def login_page():
+    st.title("🔐 เข้าสู่ระบบ / ลงทะเบียน")
+    
+    tab1, tab2 = st.tabs(["Login", "Sign Up"])
+    
+    # --- ส่วน Login ---
+    with tab1:
+        username = st.text_input("Username", key="login_user")
+        password = st.text_input("Password", type="password", key="login_pass")
+        
+        if st.button("Login"):
+            user_info = check_login(username, password)
+            if user_info is not None:
+                # บันทึกลง Session ว่าล็อกอินแล้ว
+                st.session_state['logged_in'] = True
+                st.session_state['user_name'] = user_info['name']
+                st.session_state['role'] = user_info['role']
+                st.session_state['username'] = user_info['username']
+                st.success(f"ยินดีต้อนรับ {user_info['name']}")
+                time.sleep(1)
+                st.rerun() # รีเฟรชหน้าเพื่อเข้าสู่ระบบหลัก
+            else:
+                st.error("Username หรือ Password ไม่ถูกต้อง")
+
+    # --- ส่วน Sign Up ---
+    with tab2:
+        st.header("สมัครสมาชิกใหม่")
+        new_user = st.text_input("ตั้ง Username")
+        new_pass = st.text_input("ตั้ง Password", type="password")
+        new_name = st.text_input("ชื่อเล่น/ชื่อจริง")
+        
+        if st.button("สมัครสมาชิก"):
+            # ตรงนี้เดี๋ยวเราต้องเขียนโค้ดบันทึกลง Google Sheets
+            st.warning("⚠️ ระบบ Cloud ฟรี จะยังไม่บันทึกถาวรจนกว่าจะเชื่อม Google Sheets")
+            # โค้ดจำลองการสมัคร (ให้ Role เริ่มต้นเป็น User เสมอ)
+            st.success("สมัครสมาชิกสำเร็จ! โปรดแจ้ง Admin (คุณฮาร์ท) เพื่อขอปรับสิทธิ์")
+
+# --- 3. หน้า Admin Panel (เห็นเฉพาะคุณฮาร์ท) ---
+def admin_panel():
+    st.sidebar.markdown("---")
+    st.sidebar.header("👮‍♂️ Admin Zone")
+    st.sidebar.info("หน้านี้เห็นเฉพาะ Admin")
+    
+    if st.sidebar.checkbox("จัดการผู้ใช้งาน"):
+        st.title("จัดการสิทธิ์ผู้ใช้งาน (Manage Users)")
+        st.caption("คุณสามารถเลื่อนขั้น User เป็น Admin ได้ที่นี่")
+        
+        # จำลองข้อมูลมาโชว์ (ของจริงดึงจาก Sheet)
+        users = load_users()
+        
+        # ใช้ Data Editor แก้ไขได้เลย
+        edited_df = st.data_editor(
+            users,
+            column_config={
+                "role": st.column_config.SelectboxColumn(
+                    "Role",
+                    options=["User", "Admin"], # ตัวเลือก
+                    required=True
+                )
+            },
+            num_rows="dynamic"
+        )
+        
+        if st.button("บันทึกการแก้ไขสิทธิ์"):
+            # ของจริงต้องเขียนกลับไปที่ Google Sheets
+            st.success("อัปเดตสิทธิ์เรียบร้อย!")
+
+# ================= MAIN APP FLOW =================
+
+# ตรวจสอบว่าล็อกอินหรือยัง
+if 'logged_in' not in st.session_state:
+    st.session_state['logged_in'] = False
+
+if not st.session_state['logged_in']:
+    # ถ้ายังไม่ล็อกอิน -> โชว์หน้า Login
+    login_page()
+else:
+    # ถ้าล็อกอินแล้ว -> โชว์หน้า Sidebar และเนื้อหาหลัก
+    
+    # ปุ่ม Logout
+    with st.sidebar:
+        st.write(f"👤 **{st.session_state['user_name']}** ({st.session_state['role']})")
+        if st.button("Logout"):
+            st.session_state['logged_in'] = False
+            st.rerun()
+    
+    # *** ตรวจสอบสิทธิ์เพื่อโชว์ Admin Panel ***
+    if st.session_state['role'] == 'Admin':
+        admin_panel()
+
+    # --- เนื้อหาหลักของเว็บ (โค้ดเดิมของคุณฮาร์ท) ---
+    # วางโค้ด app.py เดิมของคุณต่อจากตรงนี้ได้เลย (ตัดส่วน set_page_config ออก เพราะต้องอยู่บรรทัดแรกสุดของไฟล์)
+    
+    st.title("Team Sensor Command Center")
+    st.write("เนื้อหาสำหรับทีมงานทุกคนดูได้...")
+    # ... (วางโค้ด Dashboard, Learning Academy ต่อตรงนี้) ...
+import streamlit as st
+import pandas as pd
 import numpy as np
 import random
 
