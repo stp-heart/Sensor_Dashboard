@@ -12,42 +12,29 @@ st.set_page_config(
 )
 
 # ==========================================
-# ⚠️ ข้อมูลการเชื่อมต่อ (Updated) ⚠️
+# ⚠️ ข้อมูลการเชื่อมต่อ ⚠️
 # ==========================================
-# 1. ลิงก์ CSV ฐานข้อมูล User
 SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR0XoahMwduVM49_EJjYxMnbU9ABtSZzYPiInXBvSf_LhtAJqhl_5FRw-YrHQ7EIl2wbN27uZv0YTz9/pub?output=csv"
-
-# 2. ลิงก์ Google Form สำหรับสมัครสมาชิก
 FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSdx0bamRVPVOfiBXMpbbOSZny9Snr4U0VImflmJwm6KcdYKSA/viewform?usp=publish-editor"
 # ==========================================
 
 # --- ฟังก์ชันโหลดข้อมูล User ---
 def load_users():
     try:
-        # อ่านไฟล์ CSV จาก Google Sheet
         df = pd.read_csv(SHEET_URL, on_bad_lines='skip')
-        
-        # เปลี่ยนชื่อคอลัมน์ให้ตรงกับโค้ด
-        # ลำดับต้องเรียงตาม Sheet: Timestamp, User, Pass, Name, Role
         if len(df.columns) >= 5:
             df.columns.values[1] = 'username'
             df.columns.values[2] = 'password'
             df.columns.values[3] = 'name'
             df.columns.values[4] = 'role'
-        
-        # แปลงรหัสผ่านเป็นตัวอักษรให้หมด
         df['password'] = df['password'].astype(str)
-        # ถ้า Role ว่าง ให้เป็น User ธรรมดา
         df['role'] = df['role'].fillna('User')
-        
         return df
     except Exception as e:
-        # ถ้ายังไม่มีข้อมูล หรือโหลดไม่ได้ ให้คืนค่าว่าง
         return pd.DataFrame()
 
 # --- หน้า Login ---
 def login_page():
-    # จัดโลโก้ให้อยู่ตรงกลาง
     c1, c2, c3 = st.columns([1, 1, 1])
     with c2:
         try:
@@ -66,28 +53,23 @@ def login_page():
         
         if st.button("Login", use_container_width=True):
             df = load_users()
-            
             if not df.empty:
-                # ค้นหา User (แปลงเป็น String เพื่อความชัวร์)
                 user_match = df[
                     (df['username'].astype(str) == username) & 
                     (df['password'].astype(str) == password)
                 ]
-                
                 if not user_match.empty:
                     user_data = user_match.iloc[0]
                     st.session_state['logged_in'] = True
                     st.session_state['user'] = user_data['name']
-                    # ตัดช่องว่างข้างหน้า/หลังออก เพื่อกันความผิดพลาด
                     st.session_state['role'] = str(user_data['role']).strip() 
-                    
                     st.success(f"ยินดีต้อนรับ: {user_data['name']}")
                     time.sleep(1)
                     st.rerun()
                 else:
                     st.error("Username หรือ Password ไม่ถูกต้อง")
             else:
-                st.error("ไม่สามารถเชื่อมต่อฐานข้อมูลได้ (หรือข้อมูลยังว่างเปล่า)")
+                st.error("ไม่สามารถเชื่อมต่อฐานข้อมูลได้")
 
     with tab2:
         st.info("เพื่อความปลอดภัย ระบบจะนำท่านไปกรอกข้อมูลผ่าน Google Form")
@@ -96,18 +78,14 @@ def login_page():
 
 # --- หน้าหลัก (Main App) ---
 def main_app():
-    # Sidebar เมนู
     with st.sidebar:
         st.write(f"👤 **{st.session_state['user']}**")
-        
-        # Badge แสดงสถานะ
         role = st.session_state['role']
         if role == 'Admin':
             st.success(f"Role: {role}")
         else:
             st.info(f"Role: {role}")
             
-        # เมนู Admin (เห็นเฉพาะ Admin)
         if role == 'Admin':
             st.divider()
             st.error("🔧 Admin Zone")
@@ -120,9 +98,7 @@ def main_app():
             st.session_state['logged_in'] = False
             st.rerun()
 
-    # ================= DASHBOARD CONTENT =================
-    
-    # ฐานข้อมูล Quiz
+    # --- SETUP QUIZ DATA ---
     quiz_data = {
         "Heat Balance": [
             {"q": "สูตรการหา % Heat Balance ที่ถูกต้องตามหลัก Engineering คือข้อใด?", "c": ["(Qevap + Winput - Qcond) / Qcond * 100", "(Qevap - Qcond) / Winput * 100", "(Qcond + Winput) / Qevap * 100", "Qevap / Qcond * 100"], "a": "(Qevap + Winput - Qcond) / Qcond * 100"},
@@ -162,15 +138,13 @@ def main_app():
         ]
     }
 
-    # Navigation
     st.sidebar.title("🚀 Navigation")
     page = st.sidebar.radio("Go to", ["Dashboard ภาพรวม", "Learning Academy (บทเรียน)", "Quiz ทดสอบความรู้"])
 
-    # === PAGE 1: DASHBOARD ===
+    # === PAGE 1: DASHBOARD (Updated Logic) ===
     if page == "Dashboard ภาพรวม":
         st.title("🌏 Real-time Command Center")
         
-        # Mockup Data (ใช้ pd.DataFrame จำลองข้อมูล Site)
         if 'sites' not in st.session_state:
             st.session_state.sites = pd.DataFrame({
                 'Site Name': ['RBS Chonburi', 'Central Ayutthaya', 'RBS Rayong', 'Robinson Saraburi'],
@@ -193,11 +167,19 @@ def main_app():
             st.map(map_df, latitude='Lat', longitude='Lon', size=20, color='color')
 
         with col_data:
-            st.subheader("📝 Site Data (Editable)")
-            edited_df = st.data_editor(st.session_state.sites, num_rows="dynamic")
-            if st.button("Save Changes"):
-                st.session_state.sites = edited_df
-                st.success("Saved!")
+            st.subheader("📝 Site Data")
+            
+            # --- 🔒 ส่วนที่แก้ไขใหม่: เช็คสิทธิ์ก่อนแสดงตัวแก้ไข ---
+            if st.session_state['role'] == 'Admin':
+                st.caption("🔓 Admin Mode: You can edit this data.")
+                edited_df = st.data_editor(st.session_state.sites, num_rows="dynamic", key="site_editor")
+                if st.button("Save Changes"):
+                    st.session_state.sites = edited_df
+                    st.success("Saved!")
+            else:
+                st.caption("🔒 Read-only Mode (Contact Admin to edit)")
+                st.dataframe(st.session_state.sites)
+            # ---------------------------------------------------
 
     # === PAGE 2: LEARNING ACADEMY ===
     elif page == "Learning Academy (บทเรียน)":
