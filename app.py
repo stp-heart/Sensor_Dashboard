@@ -23,9 +23,9 @@ USER_DB_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR0XoahMwduVM49_E
 # 2. ลิงก์สมัครสมาชิก (Google Form)
 REGISTER_URL = "https://docs.google.com/forms/d/e/1FAIpQLSdx0bamRVPVOfiBXMpbbOSZny9Snr4U0VImflmJwm6KcdYKSA/viewform?usp=publish-editor"
 
-# 3. ข้อมูล CPN AYY (ลิงก์ CSV Export - แก้ไขให้แล้ว)
-# ใช้ลิงก์นี้เพื่อดึงรายชื่อ Sensor และลิงก์ API_URL จาก Sheet ของคุณ
-CPN_AYY_CSV_URL = "https://docs.google.com/spreadsheets/d/1dNUw-JL9zPIvGfHCad3NSTL8ZRbJ4n59B4aLAyLKaF4/export?format=csv&gid=47418395"
+# 3. ข้อมูล CPN AYY (ลิงก์ CSV Export ไฟล์ใหม่ของคุณ)
+# 🔴 อัปเดตเป็นไฟล์ใหม่ 1pqKDi... (GID=0) ที่มี API_URL แล้ว
+CPN_AYY_CSV_URL = "https://docs.google.com/spreadsheets/d/1pqKDiANufw3J0GXaV2aeU_rAN31FUHMBB8nv_Uh5dFQ/export?format=csv&gid=0"
 # ==========================================
 
 # --- Cookie Manager ---
@@ -50,6 +50,7 @@ def load_users():
 # --- 🔥 Function: เช็คสถานะ Real-time API ---
 def check_single_sensor(url):
     """ยิง API 1 ตัว เพื่อดูว่า Good หรือ Bad"""
+    # กรองลิงก์ว่าง หรือลิงก์ที่ไม่ใช่ http
     if pd.isna(url) or str(url).strip() == "" or not str(url).startswith("http"):
         return "No Link" 
     
@@ -218,10 +219,10 @@ def main_app():
 
             # --- Logic Real-time ---
             if 'API_URL' not in df.columns:
-                st.warning("⚠️ ไม่พบคอลัมน์ 'API_URL' ใน Google Sheet! ระบบจะแสดงข้อมูลเดิมจาก Sheet")
-                if 'getStatusAPI' not in df.columns:
-                    df['getStatusAPI'] = 'Unknown'
+                st.warning("⚠️ ไม่พบคอลัมน์ 'API_URL' ใน Google Sheet! (กรุณาเช็คว่าใส่ในบรรทัดที่ 1 หรือยัง)")
+                st.dataframe(df.head())
                 display_df = df
+                if 'getStatusAPI' not in df.columns: df['getStatusAPI'] = 'Unknown'
             else:
                 # ถ้ากดปุ่ม -> ยิง API จริง
                 if check_btn:
@@ -245,9 +246,10 @@ def main_app():
                 # เลือกคอลัมน์สถานะที่จะใช้โชว์
                 status_col = 'Live_Status' if 'Live_Status' in display_df.columns else 'getStatusAPI'
                 
-                # นับจำนวน
-                good = len(display_df[display_df[status_col] == 'Good'])
-                bad = len(display_df[display_df[status_col] == 'Bad'])
+                # นับจำนวน (กรอง Unknown ออก)
+                valid_data = display_df[display_df[status_col].isin(['Good', 'Bad'])]
+                good = len(valid_data[valid_data[status_col] == 'Good'])
+                bad = len(valid_data[valid_data[status_col] == 'Bad'])
                 
                 m1, m2, m3, m4 = st.columns(4)
                 m1.metric("Total Sensors", len(display_df))
@@ -261,10 +263,14 @@ def main_app():
                 col_filt, col_tab = st.columns([1, 3])
                 with col_filt:
                     st.subheader("Filter")
-                    status_sel = st.multiselect("Status", display_df[status_col].unique(), default=display_df[status_col].unique())
+                    
+                    # Safe Filter for Status
+                    unique_status = display_df[status_col].unique().tolist()
+                    status_sel = st.multiselect("Status", unique_status, default=unique_status)
                     
                     if 'Floor' in display_df.columns:
-                        floor_sel = st.multiselect("Floor", display_df['Floor'].unique(), default=display_df['Floor'].unique())
+                        unique_floor = display_df['Floor'].unique().tolist()
+                        floor_sel = st.multiselect("Floor", unique_floor, default=unique_floor)
                     else:
                         floor_sel = []
 
