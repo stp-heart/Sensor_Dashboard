@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import time
+import extra_streamlit_components as stx
 
 # --- 1. ตั้งค่าหน้าเว็บ (บรรทัดแรกสุด) ---
 st.set_page_config(
@@ -12,26 +13,52 @@ st.set_page_config(
 )
 
 # ==========================================
-# ⚠️ ข้อมูลการเชื่อมต่อ ⚠️
+# ⚠️ ข้อมูลการเชื่อมต่อ (ใส่ลิงก์ของคุณแล้ว) ⚠️
 # ==========================================
 SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR0XoahMwduVM49_EJjYxMnbU9ABtSZzYPiInXBvSf_LhtAJqhl_5FRw-YrHQ7EIl2wbN27uZv0YTz9/pub?output=csv"
 FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSdx0bamRVPVOfiBXMpbbOSZny9Snr4U0VImflmJwm6KcdYKSA/viewform?usp=publish-editor"
 # ==========================================
 
+# --- Setup Cookie Manager (ตัวจัดการความจำ) ---
+@st.cache_resource(experimental_allow_widgets=True)
+def get_manager():
+    return stx.CookieManager()
+
+cookie_manager = get_manager()
+
 # --- ฟังก์ชันโหลดข้อมูล User ---
 def load_users():
     try:
         df = pd.read_csv(SHEET_URL, on_bad_lines='skip')
+        # เปลี่ยนชื่อคอลัมน์ให้ตรงกับโค้ด (Mapping Column)
         if len(df.columns) >= 5:
             df.columns.values[1] = 'username'
             df.columns.values[2] = 'password'
             df.columns.values[3] = 'name'
             df.columns.values[4] = 'role'
+        
         df['password'] = df['password'].astype(str)
         df['role'] = df['role'].fillna('User')
         return df
     except Exception as e:
         return pd.DataFrame()
+
+# --- ฟังก์ชันตรวจสอบ Cookie เพื่อ Auto-Login ---
+def check_cookies():
+    # อ่านค่าจาก Cookie
+    cookie_user = cookie_manager.get(cookie="sensor_user")
+    
+    if cookie_user and not st.session_state.get('logged_in', False):
+        # ถ้ามี Cookie แต่ Session ยังไม่ Logged in -> ให้ไปดึงข้อมูลมา Auto Login
+        df = load_users()
+        user_match = df[df['username'].astype(str) == str(cookie_user)]
+        
+        if not user_match.empty:
+            user_data = user_match.iloc[0]
+            st.session_state['logged_in'] = True
+            st.session_state['user'] = user_data['name']
+            st.session_state['role'] = str(user_data['role']).strip()
+            # ไม่ต้อง Rerun ตรงนี้ ปล่อยให้ Flow ไหลไปหน้า Main App เลย
 
 # --- หน้า Login ---
 def login_page():
@@ -54,15 +81,23 @@ def login_page():
         if st.button("Login", use_container_width=True):
             df = load_users()
             if not df.empty:
+                # แปลงเป็น String ทั้งหมดเพื่อป้องกัน Error
                 user_match = df[
                     (df['username'].astype(str) == username) & 
                     (df['password'].astype(str) == password)
                 ]
+                
                 if not user_match.empty:
                     user_data = user_match.iloc[0]
+                    
+                    # 1. บันทึก Session
                     st.session_state['logged_in'] = True
                     st.session_state['user'] = user_data['name']
-                    st.session_state['role'] = str(user_data['role']).strip() 
+                    st.session_state['role'] = str(user_data['role']).strip()
+                    
+                    # 2. ฝัง Cookie (จำชื่อ Username ไว้ 7 วัน)
+                    cookie_manager.set("sensor_user", username, expires_at=pd.Timestamp.now() + pd.Timedelta(days=7))
+                    
                     st.success(f"ยินดีต้อนรับ: {user_data['name']}")
                     time.sleep(1)
                     st.rerun()
@@ -72,33 +107,34 @@ def login_page():
                 st.error("ไม่สามารถเชื่อมต่อฐานข้อมูลได้")
 
     with tab2:
-        st.info("เพื่อความปลอดภัย ระบบจะนำท่านไปกรอกข้อมูลผ่าน Google Form")
+        st.info("ระบบรับสมัครสมาชิกผ่าน Google Form")
         st.link_button("👉 กดที่นี่เพื่อกรอกใบสมัคร", FORM_URL, use_container_width=True)
         st.caption("*เมื่อสมัครเสร็จแล้ว ให้แจ้ง Admin เพื่ออนุมัติ หรือลอง Login ได้เลย")
 
 # --- หน้าหลัก (Main App) ---
 def main_app():
+    # Sidebar
     with st.sidebar:
         st.write(f"👤 **{st.session_state['user']}**")
         role = st.session_state['role']
+        
         if role == 'Admin':
             st.success(f"Role: {role}")
-        else:
-            st.info(f"Role: {role}")
-            
-        if role == 'Admin':
             st.divider()
             st.error("🔧 Admin Zone")
             if st.checkbox("ดูรายชื่อสมาชิก"):
                 st.dataframe(load_users())
                 st.caption("ไปแก้สิทธิ์ที่ Google Sheet นะครับ")
+        else:
+            st.info(f"Role: {role}")
 
         st.divider()
         if st.button("Log out", type="primary"):
+            cookie_manager.delete("sensor_user") # ลบ Cookie
             st.session_state['logged_in'] = False
             st.rerun()
 
-    # --- SETUP QUIZ DATA ---
+    # --- ฐานข้อมูล Quiz ---
     quiz_data = {
         "Heat Balance": [
             {"q": "สูตรการหา % Heat Balance ที่ถูกต้องตามหลัก Engineering คือข้อใด?", "c": ["(Qevap + Winput - Qcond) / Qcond * 100", "(Qevap - Qcond) / Winput * 100", "(Qcond + Winput) / Qevap * 100", "Qevap / Qcond * 100"], "a": "(Qevap + Winput - Qcond) / Qcond * 100"},
@@ -138,13 +174,15 @@ def main_app():
         ]
     }
 
+    # Navigation
     st.sidebar.title("🚀 Navigation")
     page = st.sidebar.radio("Go to", ["Dashboard ภาพรวม", "Learning Academy (บทเรียน)", "Quiz ทดสอบความรู้"])
 
-    # === PAGE 1: DASHBOARD (Updated Logic) ===
+    # === PAGE 1: DASHBOARD ===
     if page == "Dashboard ภาพรวม":
         st.title("🌏 Real-time Command Center")
         
+        # Mockup Data (ใช้ pd.DataFrame จำลองข้อมูล Site)
         if 'sites' not in st.session_state:
             st.session_state.sites = pd.DataFrame({
                 'Site Name': ['RBS Chonburi', 'Central Ayutthaya', 'RBS Rayong', 'Robinson Saraburi'],
@@ -169,17 +207,16 @@ def main_app():
         with col_data:
             st.subheader("📝 Site Data")
             
-            # --- 🔒 ส่วนที่แก้ไขใหม่: เช็คสิทธิ์ก่อนแสดงตัวแก้ไข ---
+            # --- 🔒 Check Permission ---
             if st.session_state['role'] == 'Admin':
-                st.caption("🔓 Admin Mode: You can edit this data.")
-                edited_df = st.data_editor(st.session_state.sites, num_rows="dynamic", key="site_editor")
+                st.caption("🔓 Admin Mode: Editing Enabled")
+                edited_df = st.data_editor(st.session_state.sites, num_rows="dynamic", key="site_edit")
                 if st.button("Save Changes"):
                     st.session_state.sites = edited_df
                     st.success("Saved!")
             else:
-                st.caption("🔒 Read-only Mode (Contact Admin to edit)")
+                st.caption("🔒 Read-only Mode")
                 st.dataframe(st.session_state.sites)
-            # ---------------------------------------------------
 
     # === PAGE 2: LEARNING ACADEMY ===
     elif page == "Learning Academy (บทเรียน)":
@@ -278,9 +315,12 @@ def main_app():
                     st.balloons()
                     st.success("สุดยอด! คุณผ่านเกณฑ์ผู้เชี่ยวชาญ 🎉")
 
-# --- การทำงานหลัก (Main Execution) ---
+# --- Main Execution Flow ---
 if 'logged_in' not in st.session_state:
     st.session_state['logged_in'] = False
+
+# เช็ค Cookie ทันทีที่รัน
+check_cookies()
 
 if not st.session_state['logged_in']:
     login_page()
