@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import time
 
-# --- 1. ตั้งค่าหน้าเว็บ (ต้องอยู่บรรทัดแรกสุดเสมอ) ---
+# --- 1. ตั้งค่าหน้าเว็บ (บรรทัดแรกสุด) ---
 st.set_page_config(
     page_title="Team Sensor Command Center",
     page_icon="⚡",
@@ -11,66 +11,117 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- 2. ฟังก์ชันตรวจสอบ Login (Gatekeeper) ---
-def check_login(username, password):
-    # ในอนาคตเราจะเปลี่ยนตรงนี้ให้ดึงจาก Google Sheets
-    # ตอนนี้ Hardcode ไว้ก่อนเพื่อทดสอบ
-    # User: admin, Pass: 1234
-    if username == "admin" and password == "1234":
-        return True
-    elif username == "film" and password == "1234":
-        return True
-    else:
-        return False
+# ==========================================
+# ⚠️ แก้ไขข้อมูลของคุณตรงนี้ ⚠️
+# ==========================================
+# 1. วางลิงก์ CSV ที่ได้จากการ "Publish to web" ตรงนี้
+SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR0XoahMwduVM49_EJjYxMnbU9ABtSZzYPiInXBvSf_LhtAJqhl_5FRw-YrHQ7EIl2wbN27uZv0YTz9/pub?output=csv"
 
-# --- 3. หน้า Login (Login Page) ---
+# 2. วางลิงก์ Google Form สำหรับสมัครสมาชิก ตรงนี้
+FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSdx0bamRVPVOfiBXMpbbOSZny9Snr4U0VImflmJwm6KcdYKSA/viewform?usp=publish-editor"
+# ==========================================
+
+# --- ฟังก์ชันโหลดข้อมูล User ---
+def load_users():
+    try:
+        # อ่านไฟล์ CSV จาก Google Sheet
+        df = pd.read_csv(SHEET_URL, on_bad_lines='skip')
+        
+        # เปลี่ยนชื่อคอลัมน์ให้ตรงกับโค้ด (เผื่อ Google Form ตั้งชื่อไทยมา)
+        # ลำดับต้องเรียงตาม Sheet: Timestamp, User, Pass, Name, Role
+        # ถ้า Column ใน Sheet คุณเรียงต่างจากนี้ ให้แก้บรรทัดนี้ครับ
+        if len(df.columns) >= 5:
+            df.columns.values[1] = 'username'
+            df.columns.values[2] = 'password'
+            df.columns.values[3] = 'name'
+            df.columns.values[4] = 'role'
+        
+        # แปลงรหัสผ่านเป็นตัวอักษรให้หมด
+        df['password'] = df['password'].astype(str)
+        # ถ้า Role ว่าง ให้เป็น User ธรรมดา
+        df['role'] = df['role'].fillna('User')
+        
+        return df
+    except Exception as e:
+        # ถ้ายังไม่มีข้อมูล หรือโหลดไม่ได้ ให้คืนค่าว่าง
+        return pd.DataFrame()
+
+# --- หน้า Login ---
 def login_page():
-    # จัดหน้าให้อยู่ตรงกลางสวยๆ
-    col1, col2, col3 = st.columns([1, 2, 1])
-    
-    with col2:
-        # --- ส่วนแสดงโลโก้ ---
+    # จัดโลโก้ให้อยู่ตรงกลาง (ใช้ Column แบ่งซ้าย-กลาง-ขวา)
+    c1, c2, c3 = st.columns([1, 1, 1])
+    with c2:
         try:
-            # ถ้ามีไฟล์ logo.png ใน GitHub มันจะโชว์ตรงนี้
-            st.image("logo.png", width=300) 
+            st.image("logo.png", use_container_width=True)
         except:
-            # ถ้ายังไม่ได้อัปโหลดรูป จะขึ้นข้อความนี้แทน
             st.header("⚡ TEAM SENSOR")
-            st.caption("Please upload 'logo.png' to GitHub")
+            st.caption("Please upload logo.png")
 
-        st.markdown("### เข้าสู่ระบบ (System Login)")
-        
-        username = st.text_input("Username")
-        password = st.text_input("Password", type="password")
-        
-        login_btn = st.button("Login", use_container_width=True)
+    st.markdown("<h3 style='text-align: center;'>System Login</h3>", unsafe_allow_html=True)
 
-        if login_btn:
-            if check_login(username, password):
-                st.session_state['logged_in'] = True
-                st.session_state['user'] = username
-                st.success("Login สำเร็จ! กำลังเข้าสู่ระบบ...")
-                time.sleep(1)
-                st.rerun() # รีเฟรชหน้าเพื่อเข้าหน้าหลัก
+    tab1, tab2 = st.tabs(["🔐 เข้าสู่ระบบ", "📝 สมัครสมาชิก"])
+
+    with tab1:
+        username = st.text_input("Username", key="login_user")
+        password = st.text_input("Password", type="password", key="login_pass")
+        
+        if st.button("Login", use_container_width=True):
+            df = load_users()
+            
+            if not df.empty:
+                # ค้นหา User
+                user_match = df[
+                    (df['username'].astype(str) == username) & 
+                    (df['password'].astype(str) == password)
+                ]
+                
+                if not user_match.empty:
+                    user_data = user_match.iloc[0]
+                    st.session_state['logged_in'] = True
+                    st.session_state['user'] = user_data['name']
+                    st.session_state['role'] = str(user_data['role']).strip() # ตัดช่องว่างออก
+                    
+                    st.success(f"ยินดีต้อนรับ: {user_data['name']}")
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    st.error("Username หรือ Password ไม่ถูกต้อง")
             else:
-                st.error("Username หรือ Password ไม่ถูกต้อง")
-        
-        st.markdown("---")
-        st.caption("Contact Admin: Khun Heart")
+                st.error("ไม่สามารถเชื่อมต่อฐานข้อมูลได้ (หรือข้อมูลยังว่างเปล่า)")
 
-# --- 4. หน้าหลักของเว็บ (Main Application) ---
+    with tab2:
+        st.info("เพื่อความปลอดภัย ระบบจะนำท่านไปกรอกข้อมูลผ่าน Google Form")
+        st.link_button("👉 กดที่นี่เพื่อกรอกใบสมัคร", FORM_URL, use_container_width=True)
+        st.caption("*เมื่อสมัครเสร็จแล้ว ให้แจ้ง Admin เพื่ออนุมัติ หรือลอง Login ได้เลย")
+
+# --- หน้าหลัก (Main App) ---
 def main_app():
-    # === ปุ่ม Logout (ใส่ไว้ที่ Sidebar) ===
+    # Sidebar เมนู
     with st.sidebar:
-        st.write(f"👤 สวัสดี: **{st.session_state['user']}**")
+        st.write(f"👤 **{st.session_state['user']}**")
+        
+        # Badge แสดงสถานะ
+        role = st.session_state['role']
+        if role == 'Admin':
+            st.success(f"Role: {role}")
+        else:
+            st.info(f"Role: {role}")
+            
+        # เมนู Admin (เห็นเฉพาะ Admin)
+        if role == 'Admin':
+            st.divider()
+            st.error("🔧 Admin Zone")
+            if st.checkbox("ดูรายชื่อสมาชิก"):
+                st.dataframe(load_users())
+                st.caption("ไปแก้สิทธิ์ที่ Google Sheet นะครับ")
+
+        st.divider()
         if st.button("Log out", type="primary"):
             st.session_state['logged_in'] = False
             st.rerun()
-        st.divider()
 
-    # ==========================================
-    # ... เนื้อหาเดิมของคุณฮาร์ท (Dashboard & Quiz) ...
-    # ==========================================
+    # ================= DASHBOARD CONTENT =================
+    # เนื้อหาเว็บไซต์หลักของคุณฮาร์ท
     
     # ฐานข้อมูล Quiz
     quiz_data = {
@@ -112,50 +163,47 @@ def main_app():
         ]
     }
 
-    # Navigation Sidebar
-    st.sidebar.title("🚀 Team Sensor Center")
-    page = st.sidebar.radio("เมนูหลัก", ["Dashboard ภาพรวม", "Learning Academy (บทเรียน)", "Quiz ทดสอบความรู้"])
+    # Navigation
+    st.sidebar.title("🚀 Navigation")
+    page = st.sidebar.radio("Go to", ["Dashboard ภาพรวม", "Learning Academy (บทเรียน)", "Quiz ทดสอบความรู้"])
 
-    # ================= DASHBOARD PAGE =================
+    # === PAGE 1: DASHBOARD ===
     if page == "Dashboard ภาพรวม":
         st.title("🌏 Real-time Command Center")
-        st.caption("มอนิเตอร์สถานะ Site งานทั่วประเทศไทย (แก้ไขข้อมูลได้)")
         
+        # Mockup Data (ใช้ pd.DataFrame จำลองข้อมูล Site)
         if 'sites' not in st.session_state:
             st.session_state.sites = pd.DataFrame({
                 'Site Name': ['RBS Chonburi', 'Central Ayutthaya', 'RBS Rayong', 'Robinson Saraburi'],
                 'Lat': [13.3611, 14.3532, 12.6828, 14.5290],
                 'Lon': [100.9847, 100.5700, 101.2816, 100.9130],
                 'Status': ['Normal', 'Critical', 'Maintenance', 'Normal'],
-                'IP Address': ['192.168.1.10', '192.168.1.25', '192.168.2.10', '192.168.1.55'],
-                'Last PM': ['2025-01-10', '2025-02-15', '2024-12-20', '2025-01-05']
             })
 
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("Total Sites", len(st.session_state.sites))
-        col2.metric("Critical Status", len(st.session_state.sites[st.session_state.sites['Status']=='Critical']), delta="-1 change")
+        col2.metric("Critical Status", len(st.session_state.sites[st.session_state.sites['Status']=='Critical']), delta="-1")
         col3.metric("Sensors Online", "98.2%", "stable")
-        col4.metric("Pending PM Jobs", "2", "Urgent")
+        col4.metric("Pending PM", "2 Jobs", "Urgent")
 
         col_map, col_data = st.columns([1, 1])
-        
         with col_map:
-            st.subheader("📍 แผนที่สถานะ")
+            st.subheader("📍 Site Map")
             map_df = st.session_state.sites.copy()
             map_df['color'] = map_df['Status'].apply(lambda x: '#00FF00' if x=='Normal' else '#FF0000')
             st.map(map_df, latitude='Lat', longitude='Lon', size=20, color='color')
 
         with col_data:
-            st.subheader("📝 จัดการข้อมูล Site")
+            st.subheader("📝 Site Data (Editable)")
             edited_df = st.data_editor(st.session_state.sites, num_rows="dynamic")
-            if st.button("บันทึกข้อมูล"):
+            if st.button("Save Changes"):
                 st.session_state.sites = edited_df
-                st.success("อัปเดตข้อมูลเรียบร้อย!")
+                st.success("Saved!")
 
-    # ================= LEARNING PAGE =================
+    # === PAGE 2: LEARNING ACADEMY ===
     elif page == "Learning Academy (บทเรียน)":
         st.title("📚 Team Sensor Academy")
-        st.markdown("แหล่งรวมความรู้ Engineering จากหน้างานจริง (CPMS, Audit, Calibration)")
+        st.markdown("แหล่งรวมความรู้ Engineering จากหน้างานจริง")
         
         tab1, tab2, tab3, tab4, tab5 = st.tabs([
             "1. Heat Balance Analysis", 
@@ -167,101 +215,56 @@ def main_app():
         
         with tab1:
             st.header("🔥 การวิเคราะห์ Heat Balance")
-            st.info("Heat Balance คือการตรวจสอบความสมดุลของพลังงาน เพื่อยืนยันว่าข้อมูลที่เราวัดเชื่อถือได้")
+            st.info("Heat Balance คือการตรวจสอบความสมดุลของพลังงาน")
             st.latex(r"\% Heat Balance = \frac{(Q_{evap} + W_{input}) - Q_{cond}}{Q_{cond}} \times 100")
             st.markdown("""
-            **ตัวแปรสำคัญ:**
-            * $Q_{evap}$: ภาระโหลดความเย็นที่ทำได้ (Ton -> kW)
-            * $W_{input}$: พลังงานไฟฟ้าที่คอมเพรสเซอร์ใช้ (kW)
-            * $Q_{cond}$: ความร้อนที่ระบายออกที่คอนเดนเซอร์ (kW)
-            
             **เกณฑ์การยอมรับ:** ต้องไม่เกิน **±5%**
-            * ถ้าค่าบวก (+) มากเกินไป: อาจเกิดจาก Flow ฝั่ง Condenser น้อยกว่าความเป็นจริง
-            * ถ้าค่าลบ (-) มากเกินไป: อาจเกิดจาก Flow ฝั่ง Evaporator น้อยกว่าความเป็นจริง หรือ Sensor เพี้ยน
+            * **ค่าบวก (+) มาก:** Flow ฝั่ง Condenser น้อยกว่าจริง
+            * **ค่าลบ (-) มาก:** Flow ฝั่ง Evaporator น้อยกว่าจริง หรือ Sensor เพี้ยน
             """)
             
         with tab2:
             st.header("⚡ การวิเคราะห์ประสิทธิภาพ (Efficiency)")
             st.markdown("""
-            **สูตรหัวใจสำคัญ:**
-            $$
-            kW/RT = \\frac{\\text{Power Input (kW)}}{\\text{Cooling Load (Ton)}}
-            $$
-            * **ยิ่งน้อย ยิ่งดี** (ประหยัดไฟ)
-            * ค่ามาตรฐาน Chiller ใหม่ๆ มักอยู่ที่ 0.55 - 0.65 kW/RT
-            
-            **Approach Temperature:**
-            * คือผลต่างระหว่าง "อุณหภูมิน้ำขาออก (LWT)" กับ "อุณหภูมิสารทำความเย็น (Refrigerant Temp)"
-            * **Condenser Approach:** ถ้ายิ่งสูง แสดงว่าท่อสกปรก ระบายความร้อนไม่ออก (ควร < 3°F)
+            **สูตรหัวใจสำคัญ:** $kW/RT = Power / Cooling Load$
+            * **ยิ่งน้อย ยิ่งดี** (มาตรฐาน Chiller ใหม่ ~0.55-0.65 kW/RT)
+            * **Approach Temp:** ผลต่าง LWT กับ Refrigerant Temp (ควร < 3°F)
             """)
 
         with tab3:
             st.header("🛠️ การสอบเทียบ (Calibration)")
             st.markdown("""
-            **หลักการคำนวณ Error:**
-            $$
-            Error = Reading (DUT) - Standard (Ref)
-            $$
-            * **DUT:** Device Under Test (ตัวที่เรากำลังวัด)
-            * **Standard:** เครื่องมือมาตรฐาน (ในทีมเราใช้ **Testo 440dp**)
-            
-            **ขั้นตอนหน้างาน:**
-            1. วาง Probe ของ Standard และ DUT ไว้คู่กัน ให้ลมผ่านเหมือนกัน
-            2. รอให้ค่า **Stable** (นิ่ง)
-            3. บันทึกค่าและคำนวณ Error
-            4. ถ้า Error เกิน Spec ต้องทำการ **Adjustment** (ปรับตั้งค่า) หรือแจ้งเปลี่ยน
+            **Formula:** $Error = Reading (DUT) - Standard (Ref)$
+            * **DUT:** Device Under Test
+            * **Ref:** Testo 440dp (Standard ของทีม)
             """)
 
         with tab4:
             st.header("ไขรหัสตัวแปร CQ (Commissioning Questionnaire)")
-            st.info("ตัวแปร CQ คือค่าสำคัญที่ต้องเก็บจากหน้างานเพื่อนำมาคำนวณ Heat Balance และประสิทธิภาพ")
-            
             cq_data = [
-                {"Code": "CQ1", "Name": "Inlet Condensing Temp", "Detail": "อุณหภูมิน้ำเข้า Condenser (ท่อ Main CDS) สำคัญมากสำหรับคำนวณ Heat Balance"},
-                {"Code": "CQ2", "Name": "Inlet Evaporator Temp", "Detail": "อุณหภูมิน้ำเข้า Evaporator (ท่อ Main CHR) ใช้คู่กับ Flow เพื่อหา Cooling Load"},
-                {"Code": "CQ3", "Name": "Outlet Condensing Temp", "Detail": "อุณหภูมิน้ำออก Condenser (ท่อ Main CDR) ใช้เช็ค Delta T ฝั่งร้อน"},
-                {"Code": "CQ4", "Name": "Outlet Evaporator Temp", "Detail": "อุณหภูมิน้ำออก Evaporator (ท่อ Main CHS) ใช้เช็ค Delta T ฝั่งเย็น"},
-                {"Code": "CQ5", "Name": "Diff Pressure (CDP)", "Detail": "ความดันแตกต่างของปั๊ม Condenser (ใช้คำนวณ Flow ทางอ้อม)"},
-                {"Code": "CQ6", "Name": "Diff Pressure (CHP)", "Detail": "ความดันแตกต่างของปั๊ม Chiller (ใช้คำนวณ Flow ทางอ้อม)"},
-                {"Code": "CQ7", "Name": "Building Load (kW)", "Detail": "ภาระโหลดทางไฟฟ้าของอาคาร (ถ้ามี)"}
+                {"Code": "CQ1", "Name": "Inlet Condensing Temp", "Detail": "อุณหภูมิน้ำเข้า Condenser (ท่อ Main CDS)"},
+                {"Code": "CQ2", "Name": "Inlet Evaporator Temp", "Detail": "อุณหภูมิน้ำเข้า Evaporator (ท่อ Main CHR)"},
+                {"Code": "CQ3", "Name": "Outlet Condensing Temp", "Detail": "อุณหภูมิน้ำออก Condenser"},
+                {"Code": "CQ4", "Name": "Outlet Evaporator Temp", "Detail": "อุณหภูมิน้ำออก Evaporator"},
+                {"Code": "CQ5", "Name": "Diff Pressure (CDP)", "Detail": "ความดันแตกต่างปั๊ม Condenser"},
+                {"Code": "CQ6", "Name": "Diff Pressure (CHP)", "Detail": "ความดันแตกต่างปั๊ม Chiller"},
+                {"Code": "CQ7", "Name": "Building Load (kW)", "Detail": "ภาระโหลดไฟฟ้าอาคาร"}
             ]
             st.table(pd.DataFrame(cq_data))
-            st.warning("⚠️ หมายเหตุ: จากรายงาน CPN พบว่าบางสาขายังติดตั้ง Sensor ไม่ครบ ทำให้ต้องใช้ค่าจากหน้าจอ Chiller (GUI) แทน ซึ่งอาจมีความคลาดเคลื่อน")
 
         with tab5:
-            st.header("📋 ขั้นตอนการสำรวจหน้างาน (Site Audit Steps)")
-            st.markdown("อ้างอิงจากคู่มือ: *TIESmartSolutions - CPMS audit guide*")
-            
-            col_step1, col_step2 = st.columns(2)
-            
-            with col_step1:
-                st.subheader("1. เก็บข้อมูลกายภาพ (Physical Data)")
-                st.markdown("""
-                สิ่งที่ต้องจดบันทึกทันทีเมื่อถึงห้องเครื่อง:
-                * ✅ **Chiller:** ขนาดกี่ตัน (Ton)? มีกี่ตัว? (Quantity)
-                * ✅ **Chilled Pump (CHP):** ขนาดมอเตอร์ (kW)?
-                * ✅ **Condenser Pump (CDP):** ขนาดมอเตอร์ (kW)?
-                * ✅ **Cooling Tower:** ขนาดพัดลม (kW)? มีกี่เซลล์?
-                * ✅ **Schedule:** เวลาเปิด-ปิดระบบ (Start/Stop Time)
-                """)
-            
-            with col_step2:
-                st.subheader("2. จดบันทึกหน้าจอ (HMI Recording)")
-                st.markdown("""
-                ให้กดหน้าจอ Chiller และจดค่าดังนี้ (หรือถ่ายรูป):
-                1.  **Power Consumption:** (kW, Volts, Amps)
-                2.  **Setpoint:** ตั้งไว้กี่องศา?
-                3.  **%FLA / %RLA:** เครื่องเดินกี่ %?
-                4.  **Evaporator Temp:** น้ำเข้า/น้ำออก (Entering/Leaving)
-                5.  **Condenser Temp:** น้ำเข้า/น้ำออก (Entering/Leaving)
-                6.  **Refrigerant Temp:** อุณหภูมิน้ำยาแอร์ (สำคัญสำหรับดู Approach Temp)
-                """)
-            st.success("💡 Tip: การคำนวณค่าไฟ Cooling Tower ให้คิดตามจำนวนพัดลมที่เปิดจริง x ชั่วโมงทำงาน (เช่น เปิด 12 ตัว จาก 25 ตัว = 50% Load)")
+            st.header("📋 ขั้นตอนการสำรวจหน้างาน (Audit)")
+            c1, c2 = st.columns(2)
+            with c1:
+                st.subheader("1. เก็บข้อมูลกายภาพ")
+                st.markdown("* Chiller (Ton, Qty)\n* Pump Motor (kW)\n* Cooling Tower Fan (kW)\n* Operation Schedule")
+            with c2:
+                st.subheader("2. จดบันทึกหน้าจอ (HMI)")
+                st.markdown("* Power (kW, V, A)\n* Setpoint\n* Evap/Cond Temp\n* Refrigerant Temp")
 
-    # ================= QUIZ PAGE =================
+    # === PAGE 3: QUIZ ===
     elif page == "Quiz ทดสอบความรู้":
         st.title("✍️ ทดสอบความรู้ (Quiz)")
-        st.caption("เลือกหัวข้อเพื่อเริ่มทำแบบทดสอบ (หัวข้อละ 10 ข้อ)")
         
         topic = st.selectbox("เลือกวิชาสอบ:", list(quiz_data.keys()))
         
@@ -274,38 +277,31 @@ def main_app():
         with st.form("quiz_form"):
             user_answers = {}
             for i, q_item in enumerate(st.session_state.current_quiz):
-                st.markdown(f"**ข้อที่ {i+1}: {q_item['q']}**")
-                user_answers[i] = st.radio(f"เลือกคำตอบข้อ {i+1}", q_item['c'], key=f"q_{topic}_{i}", index=None, label_visibility="collapsed")
+                st.markdown(f"**ข้อ {i+1}: {q_item['q']}**")
+                user_answers[i] = st.radio(f"ข้อ {i+1}", q_item['c'], key=f"q_{topic}_{i}", index=None, label_visibility="collapsed")
                 st.markdown("---")
             
-            submit_btn = st.form_submit_button("ส่งคำตอบ")
-        
-        if submit_btn:
-            score = 0
-            st.session_state.submitted = True
-            st.header("📊 ผลการทดสอบ")
-            
-            for i, q_item in enumerate(st.session_state.current_quiz):
-                u_ans = user_answers.get(i)
-                correct_ans = q_item['a']
-                if u_ans == correct_ans:
-                    score += 1
-                    st.success(f"ข้อ {i+1}: ถูกต้อง! ✅")
-                else:
-                    st.error(f"ข้อ {i+1}: ผิด! ❌ (คำตอบที่ถูกคือ: {correct_ans})")
-            
-            st.metric("คะแนนรวมของคุณ", f"{score} / 10")
-            if score >= 8:
-                st.balloons()
-                st.success("ยินดีด้วย! คุณผ่านเกณฑ์การทดสอบระดับผู้เชี่ยวชาญ 🎉")
-            else:
-                st.warning("พยายามอีกนิด! ลองทบทวนบทเรียนแล้วมาสอบใหม่นะ")
+            if st.form_submit_button("ส่งคำตอบ"):
+                score = 0
+                st.session_state.submitted = True
+                st.header("📊 ผลการทดสอบ")
+                for i, q_item in enumerate(st.session_state.current_quiz):
+                    if user_answers.get(i) == q_item['a']:
+                        score += 1
+                        st.success(f"ข้อ {i+1}: ถูกต้อง ✅")
+                    else:
+                        st.error(f"ข้อ {i+1}: ผิด ❌ (ตอบ: {q_item['a']})")
+                
+                st.metric("คะแนนของคุณ", f"{score} / 10")
+                if score >= 8:
+                    st.balloons()
+                    st.success("สุดยอด! คุณผ่านเกณฑ์ผู้เชี่ยวชาญ 🎉")
 
-# --- 5. Main Execution Flow (การทำงานหลัก) ---
+# --- การทำงานหลัก (Main Execution) ---
 if 'logged_in' not in st.session_state:
     st.session_state['logged_in'] = False
 
 if not st.session_state['logged_in']:
-    login_page() # ถ้ายังไม่ Login ให้โชว์หน้า Login
+    login_page()
 else:
-    main_app()   # ถ้า Login แล้ว ให้เข้าแอปหลัก
+    main_app()
