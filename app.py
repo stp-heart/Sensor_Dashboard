@@ -12,12 +12,12 @@ st.set_page_config(
 )
 
 # ==========================================
-# ⚠️ แก้ไขข้อมูลของคุณตรงนี้ ⚠️
+# ⚠️ ข้อมูลการเชื่อมต่อ (Updated) ⚠️
 # ==========================================
-# 1. วางลิงก์ CSV ที่ได้จากการ "Publish to web" ตรงนี้
+# 1. ลิงก์ CSV ฐานข้อมูล User
 SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR0XoahMwduVM49_EJjYxMnbU9ABtSZzYPiInXBvSf_LhtAJqhl_5FRw-YrHQ7EIl2wbN27uZv0YTz9/pub?output=csv"
 
-# 2. วางลิงก์ Google Form สำหรับสมัครสมาชิก ตรงนี้
+# 2. ลิงก์ Google Form สำหรับสมัครสมาชิก
 FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSdx0bamRVPVOfiBXMpbbOSZny9Snr4U0VImflmJwm6KcdYKSA/viewform?usp=publish-editor"
 # ==========================================
 
@@ -27,9 +27,8 @@ def load_users():
         # อ่านไฟล์ CSV จาก Google Sheet
         df = pd.read_csv(SHEET_URL, on_bad_lines='skip')
         
-        # เปลี่ยนชื่อคอลัมน์ให้ตรงกับโค้ด (เผื่อ Google Form ตั้งชื่อไทยมา)
+        # เปลี่ยนชื่อคอลัมน์ให้ตรงกับโค้ด
         # ลำดับต้องเรียงตาม Sheet: Timestamp, User, Pass, Name, Role
-        # ถ้า Column ใน Sheet คุณเรียงต่างจากนี้ ให้แก้บรรทัดนี้ครับ
         if len(df.columns) >= 5:
             df.columns.values[1] = 'username'
             df.columns.values[2] = 'password'
@@ -48,7 +47,7 @@ def load_users():
 
 # --- หน้า Login ---
 def login_page():
-    # จัดโลโก้ให้อยู่ตรงกลาง (ใช้ Column แบ่งซ้าย-กลาง-ขวา)
+    # จัดโลโก้ให้อยู่ตรงกลาง
     c1, c2, c3 = st.columns([1, 1, 1])
     with c2:
         try:
@@ -69,7 +68,7 @@ def login_page():
             df = load_users()
             
             if not df.empty:
-                # ค้นหา User
+                # ค้นหา User (แปลงเป็น String เพื่อความชัวร์)
                 user_match = df[
                     (df['username'].astype(str) == username) & 
                     (df['password'].astype(str) == password)
@@ -79,7 +78,8 @@ def login_page():
                     user_data = user_match.iloc[0]
                     st.session_state['logged_in'] = True
                     st.session_state['user'] = user_data['name']
-                    st.session_state['role'] = str(user_data['role']).strip() # ตัดช่องว่างออก
+                    # ตัดช่องว่างข้างหน้า/หลังออก เพื่อกันความผิดพลาด
+                    st.session_state['role'] = str(user_data['role']).strip() 
                     
                     st.success(f"ยินดีต้อนรับ: {user_data['name']}")
                     time.sleep(1)
@@ -121,7 +121,6 @@ def main_app():
             st.rerun()
 
     # ================= DASHBOARD CONTENT =================
-    # เนื้อหาเว็บไซต์หลักของคุณฮาร์ท
     
     # ฐานข้อมูล Quiz
     quiz_data = {
