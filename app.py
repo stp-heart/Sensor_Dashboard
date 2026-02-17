@@ -3,8 +3,10 @@ import pandas as pd
 import numpy as np
 import time
 import extra_streamlit_components as stx
+import requests
+import concurrent.futures
 
-# --- 1. ตั้งค่าหน้าเว็บ ---
+# --- 1. ตั้งค่าหน้าเว็บ (ต้องอยู่บรรทัดแรกสุด) ---
 st.set_page_config(
     page_title="Team Sensor Command Center",
     page_icon="🏢",
@@ -13,27 +15,27 @@ st.set_page_config(
 )
 
 # ==========================================
-# ⚠️ CONFIGURATION (ตั้งค่าการเชื่อมต่อ) ⚠️
+# ⚠️ CONFIGURATION (ตั้งค่าลิงก์) ⚠️
 # ==========================================
 # 1. ฐานข้อมูลสมาชิก (User DB)
 USER_DB_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR0XoahMwduVM49_EJjYxMnbU9ABtSZzYPiInXBvSf_LhtAJqhl_5FRw-YrHQ7EIl2wbN27uZv0YTz9/pub?output=csv"
 
-# 2. ลิงก์สมัครสมาชิก
+# 2. ลิงก์สมัครสมาชิก (Google Form)
 REGISTER_URL = "https://docs.google.com/forms/d/e/1FAIpQLSdx0bamRVPVOfiBXMpbbOSZny9Snr4U0VImflmJwm6KcdYKSA/viewform?usp=publish-editor"
 
-# 3. ข้อมูล CPN AYY (ลิงก์ CSV จาก Sheet ที่คุณให้มา)
-# ผมแปลงลิงก์ Edit เป็น Export CSV ให้แล้วครับ
-CPN_AYY_API_URL = "https://docs.google.com/spreadsheets/d/1dNUw-JL9zPIvGfHCad3NSTL8ZRbJ4n59B4aLAyLKaF4/export?format=csv&gid=47418395"
+# 3. ข้อมูล CPN AYY (ลิงก์ CSV Export - แก้ไขให้แล้ว)
+# ใช้ลิงก์นี้เพื่อดึงรายชื่อ Sensor และลิงก์ API_URL จาก Sheet ของคุณ
+CPN_AYY_CSV_URL = "https://docs.google.com/spreadsheets/d/1dNUw-JL9zPIvGfHCad3NSTL8ZRbJ4n59B4aLAyLKaF4/export?format=csv&gid=47418395"
 # ==========================================
 
-# --- Setup Cookie Manager ---
-# (ใช้แบบไม่มี cache เพื่อแก้ bug เวอร์ชันใหม่)
+# --- Cookie Manager ---
 cookie_manager = stx.CookieManager()
 
 # --- Function: โหลดข้อมูลสมาชิก ---
 def load_users():
     try:
         df = pd.read_csv(USER_DB_URL, on_bad_lines='skip')
+        # Map Column Name ให้ตรงกับโค้ด
         if len(df.columns) >= 5:
             df.columns.values[1] = 'username'
             df.columns.values[2] = 'password'
@@ -45,29 +47,42 @@ def load_users():
     except:
         return pd.DataFrame()
 
-# --- Function: โหลดข้อมูล CPN AYY (แบบฉลาด กรองขยะทิ้ง) ---
-@st.cache_data(ttl=60)
-def load_cpn_data():
+# --- 🔥 Function: เช็คสถานะ Real-time API ---
+def check_single_sensor(url):
+    """ยิง API 1 ตัว เพื่อดูว่า Good หรือ Bad"""
+    if pd.isna(url) or str(url).strip() == "" or not str(url).startswith("http"):
+        return "No Link" 
+    
     try:
-        # อ่านข้อมูล
-        df = pd.read_csv(CPN_AYY_API_URL, on_bad_lines='skip')
+        # ยิง API (รอสูงสุด 3 วินาที)
+        response = requests.get(str(url), timeout=3)
         
-        # 1. ลบคอลัมน์ที่ชื่อ Unnamed (ขยะ)
-        df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
-        
-        # 2. ลบแถวที่ว่างทุกช่องทิ้ง
-        df.dropna(how='all', inplace=True)
-        
-        # 3. แปลงเป็น String กัน Error
-        df = df.astype(str)
-        
-        # 4. (Option) ถ้ามีคอลัมน์ getStatusAPI ให้กรองเฉพาะที่มีค่า
-        if 'getStatusAPI' in df.columns:
-            df = df[df['getStatusAPI'].str.lower() != 'nan']
-            
-        return df
-    except Exception as e:
-        return pd.DataFrame()
+        if response.status_code == 200:
+            data = response.json()
+            # 🧠 Logic: ถ้า API ตอบกลับมาและมีข้อมูล = Good
+            # (ถ้าข้อมูลหายเกิน 4 ช่วง API มักจะตอบกลับมาเป็นค่าว่างหรือ Error)
+            if data: 
+                return "Good"
+            else:
+                return "Bad"
+        else:
+            return "Bad" # Server Error
+    except:
+        return "Bad" # Connection Error
+
+def fetch_realtime_data_parallel(df):
+    """ยิง API ทุกตัวพร้อมกัน (Parallel)"""
+    # ตรวจสอบว่ามีคอลัมน์ API_URL หรือไม่
+    if 'API_URL' not in df.columns:
+        return ["No API_URL Column"] * len(df)
+
+    urls = df['API_URL'].tolist()
+    
+    # ใช้ ThreadPool ยิงพร้อมกัน 20 ตัว เพื่อความเร็ว
+    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+        results = list(executor.map(check_single_sensor, urls))
+    
+    return results
 
 # --- Function: Auto-Login ---
 def check_cookies():
@@ -139,7 +154,7 @@ def main_app():
             st.session_state['logged_in'] = False
             st.rerun()
 
-    # --- NAVIGATION ---
+    # --- Navigation ---
     st.sidebar.title("🚀 Navigation")
     page = st.sidebar.radio("Go to", [
         "🌏 Dashboard: Overview",
@@ -148,7 +163,7 @@ def main_app():
         "✍️ Quiz"
     ])
 
-    # === 1. DASHBOARD: OVERVIEW (Mockup Map) ===
+    # === 1. OVERVIEW (แผนที่ประเทศไทย) ===
     if page == "🌏 Dashboard: Overview":
         st.title("🌏 Real-time Command Center (Overview)")
         
@@ -185,78 +200,100 @@ def main_app():
                 st.caption("🔒 Read-only Mode")
                 st.dataframe(st.session_state.sites)
 
-    # === 2. DASHBOARD: CPN AYY (Real Data) ===
+    # === 2. DASHBOARD CPN AYY (Real-Time API Check) ===
     elif page == "🏢 Dashboard: CPN AYY":
-        st.title("🏢 CPN Ayutthaya - Sensor Status")
+        st.title("🏢 CPN Ayutthaya - Live Monitor")
         
-        # โหลดข้อมูล
-        df = load_cpn_data()
-        
-        if not df.empty:
-            # เช็คชื่อคอลัมน์ (เผื่อพิมพ์ไม่ตรงเป๊ะ)
-            cols = df.columns.tolist()
+        # 1. โหลดข้อมูลดิบจาก CSV (เพื่อเอารายชื่อ Sensor)
+        try:
+            df = pd.read_csv(CPN_AYY_CSV_URL, on_bad_lines='skip')
+            df = df.loc[:, ~df.columns.str.contains('^Unnamed')] # ลบคอลัมน์ขยะ
             
-            # KPI Cards
-            if 'getStatusAPI' in cols:
-                total = len(df)
-                # นับ Good/Bad (แปลงเป็นตัวพิมพ์เล็กเพื่อความชัวร์ในการเปรียบเทียบ)
-                good = len(df[df['getStatusAPI'].str.lower() == 'good'])
-                bad = len(df[df['getStatusAPI'].str.lower() == 'bad'])
+            # ปุ่มเช็คสถานะ
+            c_head1, c_head2 = st.columns([3, 1])
+            with c_head1:
+                st.info("💡 กดปุ่ม 'Check Live Status' เพื่อยิงสัญญาณเช็ค API จริงเดี๋ยวนี้")
+            with c_head2:
+                check_btn = st.button("🔴 Check Live Status", type="primary", use_container_width=True)
+
+            # --- Logic Real-time ---
+            if 'API_URL' not in df.columns:
+                st.warning("⚠️ ไม่พบคอลัมน์ 'API_URL' ใน Google Sheet! ระบบจะแสดงข้อมูลเดิมจาก Sheet")
+                if 'getStatusAPI' not in df.columns:
+                    df['getStatusAPI'] = 'Unknown'
+                display_df = df
+            else:
+                # ถ้ากดปุ่ม -> ยิง API จริง
+                if check_btn:
+                    with st.spinner("🚀 กำลังเชื่อมต่อ API ทุกตัว... (Real-time)"):
+                        realtime_results = fetch_realtime_data_parallel(df)
+                        df['Live_Status'] = realtime_results
+                        st.session_state['cpn_live_cache'] = df # จำค่าไว้ชั่วคราว
+                        st.success("อัปเดตข้อมูลเรียบร้อย!")
+                        display_df = df
                 
-                c1, c2, c3, c4 = st.columns(4)
-                c1.metric("Total Points", total)
-                c2.metric("Status: Good", good, "Online")
-                c3.metric("Status: Bad", bad, "Offline", delta_color="inverse")
-                c4.metric("Last Update", time.strftime("%H:%M"))
+                # ถ้าเคยเช็คแล้ว ให้ใช้ค่าเดิม
+                elif 'cpn_live_cache' in st.session_state:
+                    display_df = st.session_state['cpn_live_cache']
+                else:
+                    # ถ้ายังไม่เคยเช็ค ใช้ค่า default
+                    df['Live_Status'] = 'Unknown (Press Check)'
+                    display_df = df
+
+            # --- แสดงผล Dashboard ---
+            if not display_df.empty:
+                # เลือกคอลัมน์สถานะที่จะใช้โชว์
+                status_col = 'Live_Status' if 'Live_Status' in display_df.columns else 'getStatusAPI'
+                
+                # นับจำนวน
+                good = len(display_df[display_df[status_col] == 'Good'])
+                bad = len(display_df[display_df[status_col] == 'Bad'])
+                
+                m1, m2, m3, m4 = st.columns(4)
+                m1.metric("Total Sensors", len(display_df))
+                m2.metric("Good", good, "Online")
+                m3.metric("Bad", bad, "Offline", delta_color="inverse")
+                m4.metric("Last Check", time.strftime("%H:%M:%S"))
                 
                 st.divider()
-                
-                # Filters
+
+                # Filter System
                 col_filt, col_tab = st.columns([1, 3])
-                
                 with col_filt:
-                    st.subheader("🔍 Filter")
-                    status_select = st.multiselect("Status:", df['getStatusAPI'].unique(), default=df['getStatusAPI'].unique())
+                    st.subheader("Filter")
+                    status_sel = st.multiselect("Status", display_df[status_col].unique(), default=display_df[status_col].unique())
                     
-                    if 'Floor' in cols:
-                        floor_select = st.multiselect("Floor:", df['Floor'].unique(), default=df['Floor'].unique())
+                    if 'Floor' in display_df.columns:
+                        floor_sel = st.multiselect("Floor", display_df['Floor'].unique(), default=display_df['Floor'].unique())
                     else:
-                        floor_select = []
-                        
-                    if 'Area' in cols:
-                        area_select = st.multiselect("Area:", df['Area'].unique(), default=df['Area'].unique())
-                    else:
-                        area_select = []
+                        floor_sel = []
 
                 with col_tab:
-                    # Apply Logic
-                    mask = df['getStatusAPI'].isin(status_select)
-                    if floor_select:
-                        mask = mask & df['Floor'].isin(floor_select)
-                    if area_select:
-                        mask = mask & df['Area'].isin(area_select)
-                        
-                    show_df = df[mask]
+                    # Apply Filter
+                    mask = display_df[status_col].isin(status_sel)
+                    if floor_sel:
+                        mask = mask & display_df['Floor'].isin(floor_sel)
                     
-                    st.subheader("📋 Sensor List")
-                    st.dataframe(
-                        show_df,
-                        column_config={
-                            "getStatusAPI": st.column_config.TextColumn("Status", help="API Status"),
-                            "Check Signal": st.column_config.ProgressColumn("Signal", min_value=0, max_value=100, format="%d%%"),
-                        },
-                        use_container_width=True,
-                        height=500
-                    )
-            else:
-                st.error("ไม่พบคอลัมน์ 'getStatusAPI' ในไฟล์")
-                st.write("Columns found:", cols)
-                st.dataframe(df.head())
-        else:
-            st.info("กำลังโหลดข้อมูล... หรือข้อมูลใน Sheet ว่างเปล่า")
-            st.caption(f"Linked: {CPN_AYY_API_URL}")
+                    final_view = display_df[mask]
 
-    # === 3. LEARNING ACADEMY ===
+                    # Config ตารางให้สวยงาม
+                    cfg = {
+                        status_col: st.column_config.TextColumn("Status", help="สถานะล่าสุด"),
+                    }
+                    if 'API_URL' in display_df.columns:
+                        cfg["API_URL"] = st.column_config.LinkColumn("API Link")
+
+                    st.dataframe(
+                        final_view,
+                        column_config=cfg,
+                        use_container_width=True,
+                        height=600
+                    )
+
+        except Exception as e:
+            st.error(f"ไม่สามารถโหลดข้อมูลได้: {e}")
+
+    # === 3. LEARNING ACADEMY (Full Content) ===
     elif page == "📚 Learning Academy":
         st.title("📚 Team Sensor Academy")
         st.markdown("แหล่งรวมความรู้ Engineering จากหน้างานจริง")
@@ -271,12 +308,11 @@ def main_app():
         
         with tab1:
             st.header("🔥 การวิเคราะห์ Heat Balance")
-            st.info("ตรวจสอบความสมดุลพลังงาน เพื่อยืนยันความถูกต้องของข้อมูล")
             st.latex(r"\% Heat Balance = \frac{(Q_{evap} + W_{input}) - Q_{cond}}{Q_{cond}} \times 100")
             st.markdown("""
             **เกณฑ์การยอมรับ:** ต้องไม่เกิน **±5%**
-            * ถ้าเป็น **บวก (+)** มาก: Flow ฝั่ง Condenser อาจน้อยกว่าความจริง
-            * ถ้าเป็น **ลบ (-)** มาก: Flow ฝั่ง Evaporator อาจน้อยกว่าความจริง หรือ Sensor เพี้ยน
+            * ถ้าค่าบวก (+) มากเกินไป: อาจเกิดจาก Flow ฝั่ง Condenser น้อยกว่าความเป็นจริง
+            * ถ้าค่าลบ (-) มากเกินไป: อาจเกิดจาก Flow ฝั่ง Evaporator น้อยกว่าความเป็นจริง
             """)
             
         with tab2:
@@ -291,20 +327,20 @@ def main_app():
             st.header("🛠️ การสอบเทียบ (Calibration)")
             st.markdown("""
             **สูตร:** $Error = Reading (DUT) - Standard (Ref)$
-            * **DUT:** Device Under Test (ตัวที่วัด)
-            * **Ref:** Testo 440dp (Standard ของทีม)
+            * **DUT:** Device Under Test (ตัวที่เรากำลังวัด)
+            * **Standard:** เครื่องมือมาตรฐาน (Testo 440dp)
             """)
 
         with tab4:
             st.header("ไขรหัสตัวแปร CQ")
             cq_data = [
-                {"Code": "CQ1", "Name": "Inlet Condensing Temp", "Desc": "น้ำเข้า Condenser (ท่อ Main CDS)"},
-                {"Code": "CQ2", "Name": "Inlet Evaporator Temp", "Desc": "น้ำเข้า Evaporator (ท่อ Main CHR)"},
-                {"Code": "CQ3", "Name": "Outlet Condensing Temp", "Desc": "น้ำออก Condenser"},
-                {"Code": "CQ4", "Name": "Outlet Evaporator Temp", "Desc": "น้ำออก Evaporator"},
-                {"Code": "CQ5", "Name": "Diff Pressure (CDP)", "Desc": "แรงดันคร่อมปั๊ม Condenser"},
-                {"Code": "CQ6", "Name": "Diff Pressure (CHP)", "Desc": "แรงดันคร่อมปั๊ม Chiller"},
-                {"Code": "CQ7", "Name": "Building Load (kW)", "Desc": "โหลดไฟฟ้าอาคาร"}
+                {"Code": "CQ1", "Name": "Inlet Condensing Temp"},
+                {"Code": "CQ2", "Name": "Inlet Evaporator Temp"},
+                {"Code": "CQ3", "Name": "Outlet Condensing Temp"},
+                {"Code": "CQ4", "Name": "Outlet Evaporator Temp"},
+                {"Code": "CQ5", "Name": "Diff Pressure (CDP)"},
+                {"Code": "CQ6", "Name": "Diff Pressure (CHP)"},
+                {"Code": "CQ7", "Name": "Building Load (kW)"}
             ]
             st.table(pd.DataFrame(cq_data))
 
@@ -318,7 +354,7 @@ def main_app():
                 st.subheader("2. จดบันทึกหน้าจอ (HMI)")
                 st.markdown("* Power (kW, V, A)\n* Setpoint\n* Evap/Cond Temp\n* Ref. Temp")
 
-    # === 4. QUIZ ===
+    # === 4. QUIZ (Full Content) ===
     elif page == "✍️ Quiz":
         st.title("✍️ ทดสอบความรู้ (Quiz)")
         
@@ -380,7 +416,7 @@ def main_app():
                     st.balloons()
                     st.success("ยินดีด้วย! คุณเป็นผู้เชี่ยวชาญ 🎉")
 
-# --- MAIN EXECUTION ---
+# --- EXECUTION ---
 if 'logged_in' not in st.session_state:
     st.session_state['logged_in'] = False
 
