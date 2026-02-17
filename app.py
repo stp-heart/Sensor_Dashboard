@@ -24,7 +24,7 @@ REGISTER_URL = "https://docs.google.com/forms/d/e/1FAIpQLSdx0bamRVPVOfiBXMpbbOSZ
 # 3. ข้อมูล CPN AYY (Data API)
 # 🔴 [สำคัญ] คุณต้องทำตาม Step 1 เพื่อเอาลิงก์ CSV ของหน้า CPN_AYY มาวางตรงนี้นะครับ 🔴
 # (ถ้ายังไม่ได้ทำ ให้ใช้ลิงก์เดิมไปก่อน แต่ข้อมูลอาจจะไม่ตรง)
-DATA_API_URL = "วางลิงก์_CSV_ของหน้า_CPN_AYY_ตรงนี้"
+DATA_API_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ6mJlIlopngupLvxdnFyvCzVpXhWt-Slf6g4-wHa_e9lkcxMkOxAHN-3X0UBf7ZuR1sMkcuSDNE3p0/pub?output=csv"
 # ==========================================
 
 # --- Setup Cookie Manager ---
