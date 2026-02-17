@@ -13,24 +13,19 @@ st.set_page_config(
 )
 
 # ==========================================
-# ⚠️ ข้อมูลการเชื่อมต่อ (ใส่ลิงก์ของคุณแล้ว) ⚠️
+# ⚠️ ข้อมูลการเชื่อมต่อ ⚠️
 # ==========================================
 SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR0XoahMwduVM49_EJjYxMnbU9ABtSZzYPiInXBvSf_LhtAJqhl_5FRw-YrHQ7EIl2wbN27uZv0YTz9/pub?output=csv"
 FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSdx0bamRVPVOfiBXMpbbOSZny9Snr4U0VImflmJwm6KcdYKSA/viewform?usp=publish-editor"
 # ==========================================
 
-# --- Setup Cookie Manager (ตัวจัดการความจำ) ---
-@st.cache_resource(experimental_allow_widgets=True)
-def get_manager():
-    return stx.CookieManager()
-
-cookie_manager = get_manager()
+# --- Setup Cookie Manager (แก้ไขใหม่: ลบ Cache ออกเพื่อแก้ Error) ---
+cookie_manager = stx.CookieManager()
 
 # --- ฟังก์ชันโหลดข้อมูล User ---
 def load_users():
     try:
         df = pd.read_csv(SHEET_URL, on_bad_lines='skip')
-        # เปลี่ยนชื่อคอลัมน์ให้ตรงกับโค้ด (Mapping Column)
         if len(df.columns) >= 5:
             df.columns.values[1] = 'username'
             df.columns.values[2] = 'password'
@@ -46,19 +41,21 @@ def load_users():
 # --- ฟังก์ชันตรวจสอบ Cookie เพื่อ Auto-Login ---
 def check_cookies():
     # อ่านค่าจาก Cookie
-    cookie_user = cookie_manager.get(cookie="sensor_user")
-    
-    if cookie_user and not st.session_state.get('logged_in', False):
-        # ถ้ามี Cookie แต่ Session ยังไม่ Logged in -> ให้ไปดึงข้อมูลมา Auto Login
-        df = load_users()
-        user_match = df[df['username'].astype(str) == str(cookie_user)]
+    # ใช้ Try-Except เพื่อกัน Error กรณี Cookie ยังไม่พร้อมทำงาน
+    try:
+        cookie_user = cookie_manager.get(cookie="sensor_user")
         
-        if not user_match.empty:
-            user_data = user_match.iloc[0]
-            st.session_state['logged_in'] = True
-            st.session_state['user'] = user_data['name']
-            st.session_state['role'] = str(user_data['role']).strip()
-            # ไม่ต้อง Rerun ตรงนี้ ปล่อยให้ Flow ไหลไปหน้า Main App เลย
+        if cookie_user and not st.session_state.get('logged_in', False):
+            df = load_users()
+            user_match = df[df['username'].astype(str) == str(cookie_user)]
+            
+            if not user_match.empty:
+                user_data = user_match.iloc[0]
+                st.session_state['logged_in'] = True
+                st.session_state['user'] = user_data['name']
+                st.session_state['role'] = str(user_data['role']).strip()
+    except:
+        pass # ถ้าอ่าน Cookie ไม่ได้ ให้ข้ามไป (รอ Login ปกติ)
 
 # --- หน้า Login ---
 def login_page():
@@ -81,7 +78,6 @@ def login_page():
         if st.button("Login", use_container_width=True):
             df = load_users()
             if not df.empty:
-                # แปลงเป็น String ทั้งหมดเพื่อป้องกัน Error
                 user_match = df[
                     (df['username'].astype(str) == username) & 
                     (df['password'].astype(str) == password)
@@ -113,7 +109,6 @@ def login_page():
 
 # --- หน้าหลัก (Main App) ---
 def main_app():
-    # Sidebar
     with st.sidebar:
         st.write(f"👤 **{st.session_state['user']}**")
         role = st.session_state['role']
@@ -130,11 +125,11 @@ def main_app():
 
         st.divider()
         if st.button("Log out", type="primary"):
-            cookie_manager.delete("sensor_user") # ลบ Cookie
+            cookie_manager.delete("sensor_user")
             st.session_state['logged_in'] = False
             st.rerun()
 
-    # --- ฐานข้อมูล Quiz ---
+    # --- SETUP QUIZ DATA ---
     quiz_data = {
         "Heat Balance": [
             {"q": "สูตรการหา % Heat Balance ที่ถูกต้องตามหลัก Engineering คือข้อใด?", "c": ["(Qevap + Winput - Qcond) / Qcond * 100", "(Qevap - Qcond) / Winput * 100", "(Qcond + Winput) / Qevap * 100", "Qevap / Qcond * 100"], "a": "(Qevap + Winput - Qcond) / Qcond * 100"},
