@@ -6,10 +6,10 @@ import extra_streamlit_components as stx
 import requests
 import concurrent.futures
 
-# --- 1. ตั้งค่าหน้าเว็บ (Must be first) ---
+# --- 1. SET UP (บรรทัดแรกสุด) ---
 st.set_page_config(
     page_title="Team Sensor Academy",
-    page_icon="🎓",
+    page_icon="👨‍🏫",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -19,12 +19,12 @@ st.set_page_config(
 # ==========================================
 USER_DB_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR0XoahMwduVM49_EJjYxMnbU9ABtSZzYPiInXBvSf_LhtAJqhl_5FRw-YrHQ7EIl2wbN27uZv0YTz9/pub?output=csv"
 REGISTER_URL = "https://docs.google.com/forms/d/e/1FAIpQLSdx0bamRVPVOfiBXMpbbOSZny9Snr4U0VImflmJwm6KcdYKSA/viewform?usp=publish-editor"
+# ลิงก์ไฟล์งานล่าสุดของคุณ
 CPN_AYY_CSV_URL = "https://docs.google.com/spreadsheets/d/1pqKDiANufw3J0GXaV2aeU_rAN31FUHMBB8nv_Uh5dFQ/export?format=csv&gid=0"
-# ==========================================
 
 cookie_manager = stx.CookieManager()
 
-# --- Functions ---
+# --- HELPER FUNCTIONS ---
 def load_users():
     try:
         df = pd.read_csv(USER_DB_URL, on_bad_lines='skip')
@@ -41,8 +41,8 @@ def load_users():
 def check_single_sensor(url):
     if pd.isna(url) or str(url).strip() == "" or not str(url).startswith("http"): return "No Link"
     try:
-        response = requests.get(str(url), timeout=3)
-        return "Good" if (response.status_code == 200 and response.json()) else "Bad"
+        r = requests.get(str(url), timeout=3)
+        return "Good" if (r.status_code == 200 and r.json()) else "Bad"
     except: return "Bad"
 
 def fetch_realtime_data_parallel(df):
@@ -52,26 +52,22 @@ def fetch_realtime_data_parallel(df):
 
 def check_cookies():
     try:
-        cookie_user = cookie_manager.get(cookie="sensor_user")
-        if cookie_user and not st.session_state.get('logged_in', False):
+        u = cookie_manager.get(cookie="sensor_user")
+        if u and not st.session_state.get('logged_in', False):
             df = load_users()
-            user_match = df[df['username'].astype(str) == str(cookie_user)]
-            if not user_match.empty:
-                st.session_state['logged_in'] = True
-                st.session_state['user'] = user_match.iloc[0]['name']
-                st.session_state['role'] = str(user_match.iloc[0]['role']).strip()
+            m = df[df['username'].astype(str) == str(u)]
+            if not m.empty:
+                st.session_state.update({'logged_in':True, 'user':m.iloc[0]['name'], 'role':str(m.iloc[0]['role']).strip()})
     except: pass
 
-# --- PAGE: LOGIN ---
+# --- UI COMPONENTS ---
 def login_page():
-    c1, c2, c3 = st.columns([1, 1, 1])
-    with c2:
+    c1, c2, c3 = st.columns([1,1,1])
+    with c2: 
         try: st.image("logo.png", use_container_width=True)
-        except: st.title("🎓 Team Sensor")
-    
-    st.markdown("<h3 style='text-align: center;'>เข้าสู่ระบบการเรียนรู้</h3>", unsafe_allow_html=True)
-    
-    t1, t2 = st.tabs(["🔐 เข้าสู่ระบบ", "📝 ลงทะเบียนเรียน"])
+        except: st.title("👨‍🏫 Professor Heart")
+    st.markdown("<h3 style='text-align:center'>Engineering Academy Login</h3>", unsafe_allow_html=True)
+    t1, t2 = st.tabs(["🔐 Login", "📝 Register"])
     with t1:
         u = st.text_input("Username", key="u")
         p = st.text_input("Password", type="password", key="p")
@@ -80,236 +76,295 @@ def login_page():
             if not df.empty:
                 m = df[(df['username'].astype(str)==u) & (df['password'].astype(str)==p)]
                 if not m.empty:
-                    st.session_state.update({'logged_in': True, 'user': m.iloc[0]['name'], 'role': str(m.iloc[0]['role']).strip()})
+                    st.session_state.update({'logged_in':True, 'user':m.iloc[0]['name'], 'role':str(m.iloc[0]['role']).strip()})
                     cookie_manager.set("sensor_user", u, expires_at=pd.Timestamp.now() + pd.Timedelta(days=7))
                     st.rerun()
                 else: st.error("รหัสผ่านไม่ถูกต้อง")
-            else: st.error("เชื่อมต่อฐานข้อมูลไม่ได้")
+            else: st.error("ไม่สามารถเชื่อมต่อฐานข้อมูลได้")
     with t2:
         st.info("กรอกข้อมูลเพื่อลงทะเบียน")
-        st.link_button("ไปที่แบบฟอร์ม", REGISTER_URL, use_container_width=True)
+        st.link_button("👉 ไปที่แบบฟอร์ม", REGISTER_URL, use_container_width=True)
 
-# --- PAGE: MAIN ---
+# --- LEARNING CONTENT (FULL) ---
+def render_learning():
+    st.title("📖 Engineering Academy: Deep Dive")
+    st.markdown("### โดย ศาสตราจารย์ฮาร์ท (Engineering Professor)")
+    
+    tab_explain, tab_calc, tab_workshop, tab_collect = st.tabs([
+        "1. อธิบายตาราง Audit (Table Anatomy)", 
+        "2. เจาะลึกสูตรคำนวณ (Advanced Formulas)", 
+        "3. Workshop คำนวณจริง (Case Study)",
+        "4. การเก็บข้อมูล (Data Collection)"
+    ])
+
+    # --- TAB 1: TABLE ANATOMY ---
+    with tab_explain:
+        st.header("บทที่ 1: เจาะลึกตาราง Audit (Table Anatomy)")
+        st.info("ทำความเข้าใจที่มาของข้อมูลในตาราง Report ทีละคอลัมน์")
+
+        # Table Data Mockup
+        st.subheader("📊 ตัวอย่างตาราง Chiller Operation Data")
+        mock_data = {
+            "Setpoint": ["44°F"], "%FLA": ["85%"], "Power (kW)": ["210 kW"],
+            "Tevi": ["54°F"], "Tevo": ["44°F"], "CQ1": ["10°F"],
+            "Tcdi": ["85°F"], "Tcdo": ["95°F"], "CQ2": ["10°F"],
+            "Evap_Sat": ["40°F"], "CQ7": ["4°F"],
+            "Cond_Sat": ["100°F"], "CQ6": ["5°F"]
+        }
+        st.dataframe(pd.DataFrame(mock_data))
+
+        st.markdown("---")
+        c1, c2 = st.columns(2)
+        
+        with c1:
+            st.markdown("#### 🔵 กลุ่ม 1: ข้อมูลดิบ (Raw Data from HMI)")
+            st.markdown("""
+            **1. Setpoint**
+            * **คือ:** ค่าอุณหภูมิน้ำออกที่เราตั้งค่าสั่งให้เครื่องทำ
+            * **ที่มา:** อ่านจากหน้าจอ HMI
+            
+            **2. %FLA (% Full Load Amps)**
+            * **คือ:** เปอร์เซ็นต์กระแสที่ใช้เทียบกับพิกัดสูงสุด
+            * **ที่มา:** อ่านจากหน้าจอ HMI
+            * **ใช้ทำอะไร:** ประเมิน Load คร่าวๆ
+            
+            **3. Power (kW)**
+            * **คือ:** กำลังไฟฟ้าที่กินจริง
+            * **ที่มา:** Power Meter หรือหน้าจอ HMI
+            
+            **4. Temp Evap (Tevi / Tevo)**
+            * **คือ:** อุณหภูมิน้ำเข้า/ออก ฝั่งน้ำเย็น
+            * **ที่มา:** Sensor ท่อ CHR/CHS หรือหน้าจอ HMI
+            
+            **5. Temp Cond (Tcdi / Tcdo)**
+            * **คือ:** อุณหภูมิน้ำเข้า/ออก ฝั่งระบายความร้อน
+            * **ที่มา:** Sensor ท่อ CDS/CDR หรือหน้าจอ HMI
+            """)
+
+        with c2:
+            st.markdown("#### 🔴 กลุ่ม 2: ข้อมูลจากการคำนวณ (Calculated)")
+            st.markdown("""
+            **6. CQ1 (Delta T Evap)**
+            * **สูตร:** $T_{evi} - T_{evo}$ (เข้า - ออก)
+            * **ปกติ:** ควรประมาณ 10°F
+            
+            **7. CQ2 (Delta T Cond)**
+            * **สูตร:** $T_{cdo} - T_{cdi}$ (ออก - เข้า)
+            * **ปกติ:** ควรประมาณ 10°F
+            
+            **8. T_Sat (Evap/Cond)**
+            * **คือ:** อุณหภูมิน้ำยาแอร์ (Saturation Temp)
+            * **ที่มา:** แปลงค่าจาก Pressure Gauge หรือดูหน้าจอ
+            
+            **9. CQ7 (Evap Approach)**
+            * **สูตร:** $T_{evo} - T_{EvapSat}$ (น้ำออก - น้ำยา)
+            * **ใช้ดู:** ประสิทธิภาพการแลกเปลี่ยนความร้อนฝั่งเย็น
+            
+            **10. CQ6 (Cond Approach)**
+            * **สูตร:** $T_{CondSat} - T_{cdo}$ (น้ำยา - น้ำออก)
+            * **ใช้ดู:** ตะกรันในท่อ (Fouling) ถ้าสูงต้องแยงท่อ
+            """)
+
+    # --- TAB 2: FORMULAS ---
+    with tab_calc:
+        st.header("บทที่ 2: เจาะลึกสูตรคำนวณ (Formulas)")
+        
+        st.subheader("1. การหาค่า Loss (ความสูญเสียพลังงาน)")
+        st.markdown("ใช้สำหรับหาว่า **'ปั๊มกินไฟเกินความจำเป็นไปเท่าไหร่'** จากการที่ CQ ต่ำกว่า Design")
+        st.success("💡 **หลักการ:** $Power \propto Flow^3$ (กฎ Affinity Laws)")
+        
+        st.latex(r"Loss (kW) = kW_{Actual} \times \left[ 1 - \left( \frac{CQ_{Actual}}{CQ_{Design}} \right)^3 \right]")
+        
+        st.markdown("**ตัวแปร:**")
+        st.markdown("- $kW_{Actual}$: กำลังไฟฟ้าปั๊มที่วัดได้จริง")
+        st.markdown("- $CQ_{Actual}$: Delta T ที่วัดได้จริง")
+        st.markdown("- $CQ_{Design}$: Delta T ที่ออกแบบไว้ (ปกติใช้ 10°F)")
+        st.info("**ความหมาย:** ถ้า CQ ต่ำลง -> Flow จะสูงขึ้น -> kW ปั๊มจะพุ่งสูงขึ้นแบบกำลัง 3 ส่วนต่างนั้นคือ Loss")
+
+        st.divider()
+
+        st.subheader("2. การหา Heat Balance")
+        st.latex(r"\% Heat Balance = \frac{(Q_{evap} + W_{input}) - Q_{cond}}{Q_{cond}} \times 100")
+        
+        c_f1, c_f2 = st.columns(2)
+        with c_f1:
+            st.markdown("**ฝั่งทำความเย็น ($Q_{evap}$)**")
+            st.latex(r"Q_{evap} (Ton) = \frac{500 \times GPM \times CQ1}{12,000}")
+            st.caption("CQ1 = Evap Return - Evap Leaving")
+            st.markdown("*500 มาจาก 8.33 lb/gal x 60 min x 1 Btu/lb°F*")
+        
+        with c_f2:
+            st.markdown("**ฝั่งระบายความร้อน ($Q_{cond}$)**")
+            st.latex(r"Q_{cond} (Ton) = \frac{500 \times GPM \times CQ2}{15,000}")
+            st.caption("CQ2 = Cond Leaving - Cond Return")
+            st.markdown("*15,000 มาจาก 12,000 x 1.25 (เผื่อ Heat Rejection 25%)*")
+
+    # --- TAB 3: WORKSHOP (ละเอียดสุดๆ) ---
+    with tab_workshop:
+        st.header("🧮 บทที่ 3: Workshop คำนวณจริง (Case Study)")
+        st.markdown("ข้อมูลทั้งหมดอ้างอิงจากไฟล์ *TIESmartSolutions - CPMS audit guide.pptx*")
+
+        # --- CASE 1: LOSS FROM CQ ---
+        with st.expander("💸 Case 1: การหา Loss from CQ (สำคัญมาก!)", expanded=True):
+            st.markdown("#### สถานการณ์สมมติ:")
+            st.markdown("ระบบปั๊มน้ำ (Pump) กินไฟวัดจริง **445.5 kW** (จากไฟล์ Audit Guide)")
+            st.markdown("แต่เมื่อวัดอุณหภูมิพบว่า **CQ วัดได้แค่ 5°F** (Low Delta T) ทั้งที่ Design ไว้ **10°F**")
+            
+            st.markdown("#### วิธีทำ:")
+            st.markdown("1. **เทียบสัดส่วน CQ:**")
+            st.latex(r"Ratio = \frac{CQ_{Actual}}{CQ_{Design}} = \frac{5}{10} = 0.5")
+            st.caption("*(แปลว่า Flow Rate ไหลเร็วกว่าที่ควรจะเป็น 2 เท่า)*")
+            
+            st.markdown("2. **เข้าสูตร Affinity Law (กำลัง 3):**")
+            st.latex(r"Loss = 445.5 \times [1 - (0.5)^3]")
+            st.latex(r"Loss = 445.5 \times [1 - 0.125] = 445.5 \times 0.875")
+            
+            st.markdown("3. **ผลลัพธ์:**")
+            st.latex(r"Loss = 389.8 \text{ kW}")
+            
+            st.error("❌ **วิเคราะห์:** ปั๊มกินไฟ 445.5 kW แต่ใช้งานจริงจังแค่ 55.7 kW อีก **389.8 kW คือพลังงานที่สูญเสียไปฟรีๆ** จากการที่น้ำไหลเร็วเกินไป (Over Flow)")
+
+        # --- CASE 2: PUMP ENERGY ---
+        with st.expander("💦 Case 2: การคำนวณพลังงาน Pump (จากไฟล์ PPT)", expanded=False):
+            st.markdown("#### ข้อมูลหน้างาน:")
+            st.write("- Nameplate Max: **1,071 kW**")
+            st.write("- Actual Power: **445.5 kW**")
+            st.write("- Hours: **13 hr**")
+            
+            st.markdown("#### วิธีคำนวณ:")
+            st.markdown("**1. หา %Load:**")
+            st.latex(r"\%Load = \frac{445.5}{1,071} \times 100 = 41.6\%")
+            st.markdown("**2. หา kWh:**")
+            st.latex(r"kWh = 445.5 \times 13 = 5,791.5 \text{ Units}")
+
+        # --- CASE 3: COOLING TOWER ---
+        with st.expander("V Case 3: การคำนวณ Cooling Tower (จากไฟล์ PPT)", expanded=False):
+            st.markdown("#### ข้อมูลหน้างาน:")
+            st.write("- Spec: **5.5 kW x 25 ตัว**")
+            st.write("- เปิดจริง: **12 ตัว**")
+            st.write("- Hours: **13 hr**")
+            
+            st.markdown("#### วิธีคำนวณ:")
+            st.markdown("**1. หา kW ที่ใช้จริง (Actual kW):**")
+            st.code("5.5 kW * 12 ตัว = 66 kW", language="python")
+            
+            st.markdown("**2. หาหน่วยไฟฟ้า (kWh):**")
+            st.latex(r"kWh = 66 \text{ kW} \times 13 \text{ hr} = 858 \text{ Units}")
+
+        # --- CASE 4: HEAT BALANCE ---
+        with st.expander("🌡️ Case 4: คำนวณ Heat Balance (ละเอียด)", expanded=False):
+            st.markdown("**ข้อมูล:** GPM=3000, CQ1=10, CQ2=10, Power=661 kW")
+            st.markdown("**1. หา Q_evap:**")
+            st.latex(r"\frac{500 \times 3000 \times 10}{12000} = 1,250 \text{ Ton} \Rightarrow 4,396 \text{ kW}")
+            st.markdown("**2. หา Q_cond:**")
+            st.latex(r"\frac{500 \times 3000 \times 10}{15000} = 1,000 \text{ Ton} \Rightarrow 3,516 \text{ kW}")
+            st.markdown("**3. Heat Balance:**")
+            st.latex(r"\frac{(4396 + 661) - 3516}{3516} \times 100 = +43.8\%")
+
+    # --- TAB 4: DATA COLLECTION ---
+    with tab_collect:
+        st.header("บทที่ 4: การเก็บข้อมูล (Data Collection)")
+        st.info("แยกแยะให้ออกระหว่างค่า Design (Nameplate) และค่า Actual (HMI)")
+        
+        c1, c2 = st.columns(2)
+        with c1:
+            st.subheader("📌 1. Nameplate (Design)")
+            st.markdown("ใช้เป็น **ตัวหาร** เพื่อหา %Load")
+            st.markdown("""
+            * **Chiller:** kW Max, Tons Max
+            * **Pump:** kW Motor (Max)
+            * **Cooling Tower:** Fan Motor kW (Max)
+            """)
+        with c2:
+            st.subheader("🖥️ 2. HMI Screen (Actual)")
+            st.markdown("ใช้คำนวณ **Energy & Efficiency**")
+            st.markdown("""
+            * **Power:** kW (Actual)
+            * **Temp:** Evap In/Out (CQ1), Cond In/Out (CQ2)
+            * **Pressure:** Saturation Temp (Approach)
+            """)
+
+# --- QUIZ SECTION (MASTER QUIZ) ---
+def render_quiz():
+    st.title("✍️ Final Exam")
+    st.caption("ข้อสอบวัดความรู้จากทุกบทเรียน")
+    
+    quiz_db = {
+        "หมวด 1: ทฤษฎี & สูตร": [
+            {"q": "สูตรหา Loss จาก CQ อาศัยหลักการใด?", "c": ["Affinity Laws (Flow^3)", "Ohm's Law"], "a": "Affinity Laws (Flow^3)"},
+            {"q": "ถ้า Design CQ=10 แต่วัดจริงได้ 5 (Ratio=0.5) พลังงานส่วนที่เป็น Loss คิดเป็นสัดส่วนเท่าไหร่?", "c": ["87.5% (1 - 0.5^3)", "50%"], "a": "87.5% (1 - 0.5^3)"},
+            {"q": "CQ6 (Cond Approach) ที่สูงเกินไป บ่งบอกปัญหาอะไร?", "c": ["ตะกรันในท่อ (Fouling)", "น้ำยาแอร์ขาด"], "a": "ตะกรันในท่อ (Fouling)"},
+            {"q": "ข้อมูล Setpoint เอามาจากไหน?", "c": ["หน้าจอ HMI", "Nameplate"], "a": "หน้าจอ HMI"},
+            {"q": "ในการหา Q_cond (Ton) ตัวหารคือ?", "c": ["15,000", "12,000"], "a": "15,000"},
+            {"q": "สูตร Heat Balance ข้อใดถูก?", "c": ["(Qevap+W-Qcond)/Qcond", "(Qevap-Qcond)/W"], "a": "(Qevap+W-Qcond)/Qcond"},
+            {"q": "1 Ton ความเย็น เท่ากับกี่ kW?", "c": ["3.5169", "12"], "a": "3.5169"},
+            {"q": "CQ1 คำนวณจาก?", "c": ["T_in - T_out (Evap)", "T_out - T_in (Cond)"], "a": "T_in - T_out (Evap)"},
+            {"q": "W_input ต้องรวมอะไรบ้าง?", "c": ["Compressor Power", "Fan Power"], "a": "Compressor Power"},
+            {"q": "เกณฑ์ Heat Balance ที่ผ่านคือ?", "c": ["± 5%", "± 10%"], "a": "± 5%"}
+        ],
+        "หมวด 2: การคำนวณ (Workshop)": [
+            {"q": "Pump Max 1,071 kW, Actual 445.5 kW คิดเป็น Load กี่ %?", "c": ["41.6%", "50%"], "a": "41.6%"},
+            {"q": "ถ้าเปิดปั๊ม 445.5 kW เป็นเวลา 13 ชม. ใช้ไฟกี่หน่วย?", "c": ["5,791.5 หน่วย", "13,923 หน่วย"], "a": "5,791.5 หน่วย"},
+            {"q": "Cooling Tower 25 ตัว (ตัวละ 5.5kW) เปิดจริง 12 ตัว Actual kW คือ?", "c": ["66 kW", "137.5 kW"], "a": "66 kW"},
+            {"q": "ถ้าเปิด Cooling Tower 66 kW เป็นเวลา 13 ชม. ใช้ไฟกี่หน่วย?", "c": ["858 kWh", "1,716 kWh"], "a": "858 kWh"},
+            {"q": "ถ้า GPM=3000, CQ1=10 สูตรหา Q_evap(Ton) ที่ถูกคือ?", "c": "(500*3000*10)/12000", "a": "(500*3000*10)/12000"},
+            {"q": "Q_evap 1,250 Ton แปลงเป็น kW ได้เท่าไหร่?", "c": ["4,396 kW", "1,250 kW"], "a": "4,396 kW"},
+            {"q": "ถ้า CQ วัดจริง 6, Design 10 (Ratio 0.6) ค่า Ideal Power Factor คือ?", "c": ["0.216 (0.6^3)", "0.6"], "a": "0.216 (0.6^3)"},
+            {"q": "ผลลัพธ์ Heat Balance +43.8% หมายความว่า?", "c": ["ผิดปกติ (Fail)", "ปกติ (Pass)"], "a": "ผิดปกติ (Fail)"},
+            {"q": "การแปลงหน่วย 500 มาจาก?", "c": ["8.33 lb/gal x 60 min", "1 kg/L x 60 s"], "a": "8.33 lb/gal x 60 min"},
+            {"q": "ถ้าไม่มี Flow Meter จะเกิดอะไรขึ้น?", "c": ["คำนวณ Heat Balance ไม่ได้", "ไม่เป็นไร"], "a": "คำนวณ Heat Balance ไม่ได้"}
+        ]
+    }
+    
+    topic = st.selectbox("เลือกชุดข้อสอบ:", list(quiz_db.keys()))
+    if 'qs' not in st.session_state or st.session_state.get('lt') != topic:
+        st.session_state.update({'qs':'start', 'lt':topic, 'sc':0})
+
+    with st.form("quiz_f"):
+        ans = {}
+        for i, it in enumerate(quiz_db[topic]):
+            st.markdown(f"**{i+1}. {it['q']}**")
+            ans[i] = st.radio("ตอบ:", it['c'], key=f"q{i}", label_visibility="collapsed")
+            st.divider()
+        if st.form_submit_button("ส่งคำตอบ"):
+            sc = sum([1 for i, it in enumerate(quiz_db[topic]) if ans[i]==it['a']])
+            st.success(f"คะแนน: {sc}/{len(quiz_db[topic])}")
+            if sc == len(quiz_db[topic]): st.balloons()
+
+# --- MAIN RUN ---
 def main_app():
     with st.sidebar:
-        st.write(f"สวัสดีครับคุณ **{st.session_state['user']}**")
-        st.caption(f"สถานะ: {st.session_state['role']}")
-        if st.button("ออกจากระบบ"):
+        st.write(f"User: **{st.session_state['user']}**")
+        if st.button("Logout"): 
             cookie_manager.delete("sensor_user")
             st.session_state['logged_in'] = False
             st.rerun()
+            
+    pg = st.sidebar.radio("Menu", ["🌏 Overview", "🏢 CPN AYY", "📖 Learning", "✍️ Quiz"])
     
-    st.sidebar.title("📚 เมนูบทเรียน")
-    page = st.sidebar.radio("เลือกหัวข้อ:", ["🌏 Overview Dashboard", "🏢 CPN AYY Monitor", "📖 Learning Academy", "✍️ Final Exam"])
-
-    # --- 1. OVERVIEW ---
-    if page == "🌏 Overview Dashboard":
-        st.title("🌏 Real-time Overview")
-        st.info("ภาพรวมโครงการทั้งหมด (Mockup Data)")
-
-    # --- 2. CPN AYY ---
-    elif page == "🏢 CPN AYY Monitor":
-        st.title("🏢 CPN Ayutthaya Live Monitor")
+    if pg == "🌏 Overview":
+        st.title("🌏 Overview Dashboard")
+        st.info("Mockup Data Area")
+        
+    elif pg == "🏢 CPN AYY":
+        st.title("🏢 CPN AYY Monitor")
         try:
             df = pd.read_csv(CPN_AYY_CSV_URL, on_bad_lines='skip')
             df = df.loc[:, ~df.columns.str.contains('^Unnamed')]
             
-            c1, c2 = st.columns([3, 1])
-            with c1: st.info("กดปุ่มเพื่อตรวจสอบสถานะ Sensor หน้างานจริง")
-            if c2.button("🔴 Check Live Status", type="primary"):
-                with st.spinner("กำลังเชื่อมต่อ API..."):
-                    df['Live_Status'] = fetch_realtime_data_parallel(df)
-                    st.session_state['live_cache'] = df
+            if st.button("🔴 Check Live", type="primary"):
+                df['Live'] = fetch_realtime_data_parallel(df)
+                st.session_state['live'] = df
             
-            if 'live_cache' in st.session_state: df = st.session_state['live_cache']
-            else: df['Live_Status'] = 'Unknown'
+            d = st.session_state.get('live', df)
+            if 'Live' not in d.columns: d['Live'] = 'Unknown'
+            st.dataframe(d, use_container_width=True)
+        except: st.error("Load Error")
 
-            st.dataframe(df[['Position Name', 'Live_Status', 'API_URL']], use_container_width=True)
-        except Exception as e: st.error(f"Error: {e}")
+    elif pg == "📖 Learning": render_learning()
+    elif pg == "✍️ Quiz": render_quiz()
 
-    # --- 3. LEARNING ACADEMY (NEW CONTENT) ---
-    elif page == "📖 Learning Academy":
-        st.title("📖 ห้องเรียนวิศวกรรมงานระบบ")
-        st.markdown("### โดย ศาสตราจารย์ฮาร์ท (Engineering Professor)")
-        
-        tab1, tab2, tab3 = st.tabs(["🔥 บทที่ 1: Heat Balance & CQ", "📋 บทที่ 2: Audit & Data Collection", "🧮 บทที่ 3: Workshop คำนวณจริง"])
-
-        # --- TAB 1: THEORY ---
-        with tab1:
-            st.header("บทที่ 1: ทฤษฎีสมดุลความร้อนและค่า CQ")
-            st.markdown("""
-            > **"ทำไมเราต้องหา Heat Balance?"** > เพื่อตรวจสอบว่าข้อมูลที่เราวัดมา (Data Integrity) นั้นถูกต้องเชื่อถือได้หรือไม่ ก่อนนำไปวิเคราะห์ผลประหยัดพลังงาน
-            """)
-            
-            st.divider()
-            
-            c1, c2 = st.columns(2)
-            with c1:
-                st.subheader("1. สมการ Heat Balance")
-                st.latex(r"\% Heat Balance = \frac{(Q_{evap} + W_{input}) - Q_{cond}}{Q_{cond}} \times 100")
-                st.success("✅ **เกณฑ์ที่ยอมรับได้ (Criteria):** ต้องไม่เกิน **± 5%**")
-                
-            with c2:
-                st.subheader("2. สมการย่อย (Sub-Formulas)")
-                st.info("จำสูตรแปลงหน่วยให้แม่น: **1 Ton = 3.5169 kW**")
-                st.latex(r"Q_{evap} (Ton) = \frac{500 \times GPM \times CQ1}{12,000}")
-                st.latex(r"Q_{cond} (Ton) = \frac{500 \times GPM \times CQ2}{15,000}")
-                st.markdown("*หมายเหตุ: ใช้ 500 คูณเมื่อ GPM เป็นหน่วย US Gallon*")
-
-            st.divider()
-            st.subheader("3. รู้จักตัวแปร CQ (Characteristic Quantity)")
-            
-            cq_data = [
-                {"Variable": "CQ1", "Description": "ผลต่างอุณหภูมิน้ำฝั่ง Evaporator (T_in - T_out)", "Purpose": "เช็คสมดุลน้ำเย็น"},
-                {"Variable": "CQ2", "Description": "ผลต่างอุณหภูมิน้ำฝั่ง Condenser (T_out - T_in)", "Purpose": "เช็คสมดุลระบายความร้อน"},
-                {"Variable": "CQ6", "Description": "Condenser Approach Temp (T_cond_sat - T_out)", "Purpose": "เช็คตะกรันในท่อ (Fouling)"},
-                {"Variable": "CQ7", "Description": "Evaporator Approach Temp (T_out - T_evap_sat)", "Purpose": "เช็คประสิทธิภาพแลกเปลี่ยนความร้อน"}
-            ]
-            st.table(pd.DataFrame(cq_data))
-
-        # --- TAB 2: AUDIT & SURVEY ---
-        with tab2:
-            st.header("บทที่ 2: ขั้นตอนการสำรวจหน้างาน (Site Audit)")
-            st.markdown("ข้อมูลที่ต้องเก็บจาก Nameplate และ HMI เพื่อนำมาใช้คำนวณ")
-            
-            st.subheader("📸 Checklist สิ่งที่ต้องถ่ายรูป")
-            c1, c2 = st.columns(2)
-            with c1:
-                st.info("1. Nameplate (ป้ายเพลท)")
-                st.markdown("- **Chiller:** kW, Tons, Design Temp")
-                st.markdown("- **Pump:** kW (Motor), Head, Flow")
-                st.markdown("- **Cooling Tower:** Fan Motor kW")
-            with c2:
-                st.info("2. หน้าจอ HMI (ขณะเครื่องเดิน)")
-                st.markdown("- **Power:** kW, Volts, Amps, %FLA")
-                st.markdown("- **Temp:** Evap In/Out, Cond In/Out")
-                st.markdown("- **Pressure/Sat:** Refrigerant Temp/Pressure")
-
-        # --- TAB 3: WORKSHOP CALCULATION (NEW!) ---
-        with tab3:
-            st.header("🧮 บทที่ 3: Workshop การคำนวณพลังงาน (Case Study)")
-            st.markdown("จากข้อมูลหน้างานจริง (CPMS Audit Guide) เราจะนำมาคำนวณหาการใช้พลังงานดังนี้")
-            
-            # --- EXAMPLE 1: PUMP ---
-            st.subheader("1. การคำนวณพลังงานปั๊มน้ำ (Pump Energy)")
-            st.markdown("📌 **โจทย์:** จากการสำรวจพบว่ามีปั๊มขนาด **1,071 kW** (Total) แต่ใช้งานจริงวัดได้ **445.5 kW** เปิดใช้งาน **13 ชั่วโมง/วัน**")
-            
-            with st.expander("ดูวิธีการคำนวณละเอียด (Click to expand)", expanded=True):
-                st.markdown("### ขั้นตอนที่ 1: หา %Load ของปั๊ม")
-                st.latex(r"\% Load = \frac{\text{Actual Power (kW)}}{\text{Full Load Power (kW)}} \times 100")
-                st.code("445.5 / 1,071 = 0.4159... -> คิดเป็น 41.6%", language="python")
-                
-                st.markdown("### ขั้นตอนที่ 2: คำนวณหน่วยไฟฟ้าต่อวัน (kWh/Day)")
-                st.latex(r"kWh/Day = \text{Actual Power (kW)} \times \text{Running Hours}")
-                st.code("445.5 kW x 13 hr = 5,791.5 หน่วย (kWh) ต่อวัน", language="python")
-                
-                st.info("💡 **สรุป:** ปั๊มชุดนี้ทำงานที่ 41.6% ของพิกัด และกินไฟวันละ 5,791.5 หน่วย")
-
-            st.divider()
-
-            # --- EXAMPLE 2: COOLING TOWER ---
-            st.subheader("2. การคำนวณพลังงาน Cooling Tower")
-            st.markdown("📌 **โจทย์:** มี Cooling Tower ขนาด **5.5 kW จำนวน 25 ตัว** (รวม 137.5 kW) แต่ **เปิดใช้งานจริงแค่ 12 ตัว** เปิด **13 ชั่วโมง/วัน**")
-            
-            with st.expander("ดูวิธีการคำนวณละเอียด (Click to expand)", expanded=True):
-                st.markdown("### ขั้นตอนที่ 1: หา kW ที่ใช้งานจริง (Actual kW)")
-                st.markdown("ต้องคิดจากจำนวนพัดลมที่เปิดจริงเท่านั้น")
-                st.code("5.5 kW x 12 ตัว = 66 kW (นี่คือค่า Actual Power)", language="python")
-                
-                st.markdown("### ขั้นตอนที่ 2: หา %Load เทียบกับ Full Capacity")
-                st.markdown("สมมติว่า Full Load คือเปิดหมด 25 ตัว (5.5 x 25 = 137.5 kW)")
-                st.latex(r"\% Load = \frac{66}{137.5} \times 100 = 48\%")
-                st.caption("*(ในสไลด์ตัวอย่างใช้ฐาน 132 kW เลยได้ 50% แต่หลักการเดียวกันคือเทียบ Actual/Total)*")
-                
-                st.markdown("### ขั้นตอนที่ 3: คำนวณหน่วยไฟฟ้าต่อวัน")
-                st.latex(r"kWh/Day = 66 \text{ kW} \times 13 \text{ hr}")
-                st.code("66 x 13 = 858 หน่วย (kWh) ต่อวัน", language="python")
-
-            st.divider()
-
-            # --- EXAMPLE 3: HEAT BALANCE ---
-            st.subheader("3. การคำนวณ Heat Balance (Case CPN Rayong)")
-            st.markdown("📌 **โจทย์:** Chiller #1 มีข้อมูลดังนี้")
-            col_data, col_calc = st.columns(2)
-            
-            with col_data:
-                st.write("**ข้อมูลดิบ (Raw Data):**")
-                st.write("- **GPM:** 3,000 gpm (Flow)")
-                st.write("- **T_evap_in:** 54°F")
-                st.write("- **T_evap_out:** 44°F")
-                st.write("- **W_input (kW):** 661 kW")
-                st.write("- **T_cond_out:** 94.1°F")
-                st.write("- **T_cond_in:** 84.1°F")
-            
-            with col_calc:
-                st.write("**วิธีทำ (Solution):**")
-                st.write("1. หา CQ1 (Delta T Evap) = 54 - 44 = **10°F**")
-                st.write("2. หา Q_evap (Ton) = (500 x 3000 x 10) / 12000 = **1,250 Ton**")
-                st.write("3. แปลง Q_evap เป็น kW = 1250 x 3.5169 = **4,396 kW**")
-                st.write("4. หา CQ2 (Delta T Cond) = 94.1 - 84.1 = **10°F**")
-                st.write("5. หา Q_cond (Ton) = (500 x 3000 x 10) / 15000 = **1,000 Ton**")
-                st.write("6. แปลง Q_cond เป็น kW = 1000 x 3.5169 = **3,516 kW**")
-            
-            st.info("⚠️ **ผลลัพธ์:** Heat Balance = (4396 + 661 - 3516) / 3516 * 100 = **+43.8%**")
-            st.error("❌ **วิเคราะห์:** ค่าเกิน +5% มาก แสดงว่า Flow ฝั่ง Condenser น้อยกว่าความเป็นจริงมาก (Flow Meter อาจเพี้ยน)")
-
-    # --- 4. QUIZ (NEW 20 QUESTIONS) ---
-    elif page == "✍️ Final Exam":
-        st.title("✍️ ทดสอบความรู้ (Final Exam)")
-        st.caption("ข้อสอบชุดใหม่ จากเนื้อหาบทที่ 1, 2 และ 3")
-        
-        quiz_db = {
-            "Heat Balance & CQ": [
-                {"q": "สูตรการหา % Heat Balance ที่ถูกต้องคือข้อใด?", "c": ["(Qevap + Winput - Qcond) / Qcond * 100", "(Qevap - Qcond) / Winput * 100"], "a": "(Qevap + Winput - Qcond) / Qcond * 100"},
-                {"q": "เกณฑ์มาตรฐาน (Criteria) ของ % Heat Balance คือช่วงใด?", "c": ["± 5%", "± 10%"], "a": "± 5%"},
-                {"q": "ในการแปลงหน่วย 1 Ton ความเย็น มีค่าเท่ากับกี่ kW?", "c": ["3.5169 kW", "12.000 kW"], "a": "3.5169 kW"},
-                {"q": "CQ1 คือค่าผลต่างอุณหภูมิของส่วนใด?", "c": ["น้ำเข้า-ออก Evaporator", "น้ำเข้า-ออก Condenser"], "a": "น้ำเข้า-ออก Evaporator"},
-                {"q": "CQ6 (Condenser Approach Temp) ใช้ตรวจสอบสิ่งใด?", "c": ["ความสกปรกของท่อ (Fouling)", "ประสิทธิภาพปั๊มน้ำ"], "a": "ความสกปรกของท่อ (Fouling)"},
-                {"q": "ถ้าค่า CQ วัดจริง 'ต่ำกว่า' ค่า CQ Design (Low Delta T) เกิดจากสาเหตุใด?", "c": ["Water Flow Rate สูงเกินไป", "Water Flow Rate ต่ำเกินไป"], "a": "Water Flow Rate สูงเกินไป"},
-                {"q": "ค่า W_input ในสมการ Heat Balance หมายถึงอะไร?", "c": ["พลังงานไฟฟ้าขาเข้า Chiller", "พลังงานลมจาก Cooling Tower"], "a": "พลังงานไฟฟ้าขาเข้า Chiller"},
-                {"q": "สูตรคำนวณ Q_cond (Ton) ตัวหารคือเท่าไหร่?", "c": ["15,000", "12,000"], "a": "15,000"},
-                {"q": "สูตรคำนวณ Q_evap (Ton) ตัวหารคือเท่าไหร่?", "c": ["12,000", "15,000"], "a": "12,000"},
-                {"q": "หาก % Heat Balance เป็นบวก (+) มากเกินไป แสดงว่าอะไรผิดปกติ?", "c": ["Flow ฝั่ง Condenser น้อยกว่าจริง", "Flow ฝั่ง Evaporator น้อยกว่าจริง"], "a": "Flow ฝั่ง Condenser น้อยกว่าจริง"}
-            ],
-            "Calculation & Audit": [
-                {"q": "ถ้าเปิด Cooling Tower 5.5kW จำนวน 10 ตัว เป็นเวลา 10 ชม. จะใช้ไฟกี่หน่วย?", "c": ["550 หน่วย", "55 หน่วย"], "a": "550 หน่วย"},
-                {"q": "สูตรหา %Load ของ Pump คือ?", "c": ["Actual kW / Full Load kW", "Full Load kW / Actual kW"], "a": "Actual kW / Full Load kW"},
-                {"q": "ถ้า Pump ขนาด 100 kW ทำงานจริงที่ 80 kW คิดเป็น Load กี่ %?", "c": ["80%", "20%"], "a": "80%"},
-                {"q": "ข้อมูลใดต้องเก็บจาก Nameplate ของ Chiller?", "c": ["kW & Tons", "ราคาเครื่อง"], "a": "kW & Tons"},
-                {"q": "ค่า Refrigerant Temp นำไปใช้หาค่าใด?", "c": ["Approach Temp (CQ6, CQ7)", "Flow Rate"], "a": "Approach Temp (CQ6, CQ7)"},
-                {"q": "ถ้า Heat Balance ได้ +40% ควรทำอย่างไร?", "c": ["ตรวจสอบ Flow Meter ฝั่ง Condenser", "ปล่อยผ่าน"], "a": "ตรวจสอบ Flow Meter ฝั่ง Condenser"},
-                {"q": "การคำนวณค่าไฟ Cooling Tower ต้องคิดจาก?", "c": ["จำนวนพัดลมที่เปิดจริง", "จำนวนพัดลมทั้งหมดที่มี"], "a": "จำนวนพัดลมที่เปิดจริง"},
-                {"q": "CQ7 คำนวณจากค่าใด?", "c": ["T_out_Evap - T_Refrig_Sat", "T_in - T_out"], "a": "T_out_Evap - T_Refrig_Sat"},
-                {"q": "Sensors ใดจำเป็นสำหรับหาค่า Load ของอาคาร?", "c": ["Flow Rate & Temp Evap", "Pressure Gauge"], "a": "Flow Rate & Temp Evap"},
-                {"q": "13,923 หน่วย ในตัวอย่าง Pump มาจาก?", "c": ["1,071 kW x 13 hr", "445.5 kW x 13 hr"], "a": "1,071 kW x 13 hr"}
-            ]
-        }
-        
-        topic = st.selectbox("เลือกหัวข้อสอบ:", list(quiz_db.keys()))
-        
-        if 'quiz_state' not in st.session_state or st.session_state.get('last_topic') != topic:
-            st.session_state['quiz_state'] = 'start'
-            st.session_state['last_topic'] = topic
-            st.session_state['score'] = 0
-
-        with st.form("exam_form"):
-            answers = {}
-            for i, item in enumerate(quiz_db[topic]):
-                st.markdown(f"**{i+1}. {item['q']}**")
-                answers[i] = st.radio(f"เลือกคำตอบข้อ {i+1}", item['c'], key=f"q{i}", label_visibility="collapsed")
-                st.divider()
-            
-            if st.form_submit_button("ส่งคำตอบ (Submit)"):
-                score = 0
-                for i, item in enumerate(quiz_db[topic]):
-                    if answers[i] == item['a']: score += 1
-                
-                st.success(f"🎉 คุณได้คะแนน: {score} / 10")
-                if score < 5: st.warning("ควรกลับไปทบทวนเนื้อหาใหม่นะครับ")
-                else: st.balloons()
-
-# --- EXECUTION ---
 if 'logged_in' not in st.session_state: st.session_state['logged_in'] = False
 check_cookies()
-if not st.session_state['logged_in']: login_page()
-else: main_app()
+if st.session_state['logged_in']: main_app()
+else: login_page()
